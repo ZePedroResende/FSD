@@ -5,6 +5,7 @@
 .idea/
 *.iml
 *.iws
+.settings/
 
 # Mac
 .DS_Store
