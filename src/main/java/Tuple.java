@@ -1,4 +1,14 @@
-public class Tuple {
+public class Tuple implements Transaction{
+
+    @Override
+    public int getId() {
+        return transId;
+    }
+
+    @Override
+    public boolean isCommit() {
+        return msg.equals(Type.COMMIT);
+    }
 
     public enum Type {
         ROLLBACK,

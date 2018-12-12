@@ -104,7 +104,18 @@ class TestWorker {
 
         /////////  MESSAGES ///////
 
-        test2(t);
+        Scanner s = new Scanner( System.in);
+        System.out.println("[MAIN] Press any key"); s.nextLine();
+        t.sendPut( 2L, "hello".getBytes() , 0);
+
+        System.out.println("[MAIN] Press any key"); s.nextLine();
+        t.sendCommit(0);
+
+        System.out.println("[MAIN] Press any key"); s.nextLine();
+        t.sendGet( 2L,  1);
+
+        System.out.println("[MAIN] Press any key"); s.nextLine();
+        t.sendCommit(1);
 
     }
 }
@@ -138,13 +149,13 @@ class TestCoord{
     void putAndReceive(Map<Long, byte[]> map) throws ExecutionException, InterruptedException {
 
         byte[] reply = channel.sendAndReceive(coordAddrs, "put", serializerMap.encode(map)).get();
-        System.out.println(" Reply : " + ( reply[0] == 1 ? "True" : "False") );
+        System.out.println("[MAIN] Reply : " + ( reply[0] == 1 ? "True" : "False") );
     }
 
     void getAndReceive(List<Long> list) throws ExecutionException, InterruptedException {
 
         byte[] reply = channel.sendAndReceive(coordAddrs, "get", serializerList.encode(list)).get();
-        System.out.println(" Reply : " + ( reply[0] == 1 ? "True" : "False") );
+        System.out.println("[MAIN] Reply : " + ( reply[0] == 1 ? "True" : "False") );
     }
 
 
@@ -189,21 +200,5 @@ class TestRecover{
             System.out.println( tuple.transId + " >> [" + tuple.msg + "] " + tuple.key + " ->" + value);
 
         }
-    }
-}
-
-class TestMapValue{
-
-    public static void main(String[] args){
-        MapValue t = new MapValue( "Ola".getBytes() );
-
-        System.out.println( new String( t.get() ) );
-
-        new Thread( () -> {
-
-            t.unlockRead();
-        }).start();
-
-
     }
 }
