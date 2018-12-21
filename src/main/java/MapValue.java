@@ -23,10 +23,6 @@ public class MapValue {
         w.lock();
     }
 
-    public void getLockWrite(){
-        w.lock();
-    }
-
     public void put( byte[] valeu){
         this.valeu = valeu;
         w.unlock();
