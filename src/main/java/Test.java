@@ -1,3 +1,4 @@
+import Serializers.Tuple;
 import io.atomix.cluster.messaging.ManagedMessagingService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.storage.journal.SegmentedJournal;
@@ -150,7 +151,7 @@ class TestCoord{
 
     public static void main(String[] args) throws ExecutionException, InterruptedException {
 
-        new Coordinator( workerAddrs , coordAddrs, 0 ,1  );
+        new Coord( workerAddrs , coordAddrs, 0 ,1  );
 
         for( int i = 0 ; i < workerAddrs.length; i ++ )
             new Worker(i, workerAddrs[i] );

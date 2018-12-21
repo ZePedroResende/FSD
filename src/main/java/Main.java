@@ -1,3 +1,4 @@
+import Coordinator.Coordinator;
 import io.atomix.utils.net.Address;
 
 import java.util.HashMap;
@@ -21,7 +22,7 @@ public class Main {
             next = 0;
 
             for (Address addr : coords)
-                new Coordinator(workers, addr, next++, workers.length);
+                new Coordinator(workers, coords, next++);
 
         }
     }
