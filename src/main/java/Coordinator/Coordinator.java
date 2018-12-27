@@ -7,7 +7,10 @@ import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 
@@ -16,10 +19,10 @@ public class Coordinator {
 
     private final Address[] workers;
     private final Address[] coordinators;
-    private int myId;
     private final ManagedMessagingService channel;
-    private ExecutorService es;
-    private Serializer s;
+    private final int myId;
+    private final ExecutorService es;
+    private final Serializer s;
 
     private int numberOfTrans;
 
@@ -36,8 +39,8 @@ public class Coordinator {
 
         channel.registerHandler( "put", (o, m) -> {
             RequestPut requestPut = reqPutSer.decode(m);
-                Boolean b = put(requestPut.getValues());
-                channel.sendAsync(o,"responsePut",respPutSer.encode(new ResponsePut(b)));
+            Boolean b = put(requestPut.getValues());
+            channel.sendAsync(o,"responsePut",respPutSer.encode(new ResponsePut(b)));
         },es);
 
 
@@ -46,8 +49,8 @@ public class Coordinator {
 
         channel.registerHandler( "get", (o, m) -> {
             RequestGet requestGet = reqGetSer.decode(m);
-                Map<Long,byte[]> map = get(requestGet.getValues());
-                channel.sendAsync(o,"responseGet",respGetSer.encode(new ResponseGet(map)));
+            Map<Long,byte[]> map = get(requestGet.getValues());
+            channel.sendAsync(o,"responseGet",respGetSer.encode(new ResponseGet(map)));
         },es);
 
         this.channel.start();
@@ -111,9 +114,9 @@ public class Coordinator {
 
     private Boolean putRequest (int transactionId, Long key, byte[] value)  {
         return preparedRequest(transactionId,key,value,Tuple.Request.PUT,(r) ->{
-                    Tuple t = s.decode(r);
-                    return t.getMsg().equals(Tuple.Type.OK);
-                });
+            Tuple t = s.decode(r);
+            return t.getMsg().equals(Tuple.Type.OK);
+        });
     }
 
     private Boolean preparedRequest (int transactionId, Long key, byte[] value, Tuple.Request request, Predicate<byte []> consumer)  {
@@ -136,8 +139,8 @@ public class Coordinator {
     }
 
     private CompletableFuture<Void> rollbackRequest(Address address, int transactionId){
-       return channel.sendAsync(address,"Tuple",s.encode(
-               new Tuple(0,null, Tuple.Type.ROLLBACK, Tuple.Request.CANCEL, transactionId)));
+        return channel.sendAsync(address,"Tuple",s.encode(
+                new Tuple(0,null, Tuple.Type.ROLLBACK, Tuple.Request.CANCEL, transactionId)));
     }
 
     private synchronized int getNextTransactionId(){
