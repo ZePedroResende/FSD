@@ -17,7 +17,7 @@ public class Main {
             int next = 0;
 
             for (Address addr : workers)
-                new Worker(next++, addr);
+            //    new Worker(next++, addr);
 
             next = 0;
 

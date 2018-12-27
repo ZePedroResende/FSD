@@ -7,6 +7,7 @@ public class MyLock {
 
 
     CompletableFuture<Void> lock(){
+
         CompletableFuture<Void> cf = new CompletableFuture<>();
         if( next.isEmpty() )
             cf.complete(null);
