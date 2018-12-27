@@ -73,7 +73,6 @@ public class Coordinator {
 
         return getLocks(array,(transaction, key) ->getRequest(transaction,key,hashMap),Tuple.Request.GET)
                 != null ? hashMap : null;
-
     }
 
     private List<Address> getLocks(Long[] array, BiPredicate<Integer,Long> getLock, Tuple.Request request ){
