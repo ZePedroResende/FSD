@@ -23,16 +23,16 @@ class JournalTest {
                 .addType(Tuple.class)
                 .build();
 
-        Journal j = new Journal(file, s);
-
+        Journal j;
         int count = 0;
 
+        j = new Journal(file, s);
         List<Transaction> committed = j.getCommitted().get();
         j.close();
+
         j = new Journal(file, s);
         List<Transaction> unconfirmed = j.getUnconfirmed().get();
         j.close();
-        j = new Journal(file, s);
 
         if( committed.size() != 0)
             System.out.println("Erro: teste 1 - " + committed.toString());
@@ -52,8 +52,10 @@ class JournalTest {
         j.addSegment(new Tuple(1L, null, Tuple.Type.COMMIT,   Tuple.Request.GET, 1));
         j.addSegment(new Tuple(2L, null, Tuple.Type.ROLLBACK, Tuple.Request.GET, 2));
 
+        j = new Journal(file, s);
         committed = j.getCommitted().get();
         j.close();
+
         j = new Journal(file, s);
         unconfirmed = j.getUnconfirmed().get();
         j.close();

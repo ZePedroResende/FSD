@@ -15,7 +15,7 @@ import java.util.Map;
 import java.util.concurrent.*;
 
 
-
+/*
 class Worker {
 
     private final ManagedMessagingService channel;
@@ -165,11 +165,6 @@ class Worker {
     }
 
     private void recover( SegmentedJournalReader<Object> r ){
-        /*
-            Temos que melhorar. Falta apagar as que ja nao sao usadas. Falta tambem recuperar as transações que nao
-            foram confirmadas nem abortadas. Neste caso temos que dar reply ao coordenador ou entao optar por abortar
-            sempre.
-         */
 
         Map< Integer, List<Tuple> > data = new HashMap<>();
 
@@ -218,6 +213,5 @@ class Worker {
 
         return sb.toString();
     }
-
 }
-
+*/
