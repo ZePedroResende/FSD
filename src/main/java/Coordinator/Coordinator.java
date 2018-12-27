@@ -8,6 +8,8 @@ import io.atomix.utils.serializer.Serializer;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static Serializers.Tuple.Type.OK;
@@ -73,45 +75,42 @@ public class Coordinator {
                 workersConfirm.add(workers[getWorkerIndex(key)]);
             }
             else{
-                List<CompletableFuture<Void>> futuresCancel = workersConfirm.stream()
-                        .map( r -> rollbackRequest(r,transaction))
-                        .collect(Collectors.toList());
-                CompletableFuture.allOf(futuresCancel.toArray(new CompletableFuture[futuresCancel.size()])).get();
+                CompletableFuture.allOf(workersConfirm.stream()
+                        .map(r -> rollbackRequest(r, transaction))
+                        .toArray(CompletableFuture[]::new)).get();
                 return false;
             }
         }
 
-        List<CompletableFuture<Void>> futures = values.keySet().stream()
-                .map(key -> putCommit(transaction,key).thenRun(() -> {}))
-                .collect(Collectors.toList());
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).get();
+        CompletableFuture.allOf(values.keySet().stream()
+                .map(key -> putCommit(transaction, key).thenRun(() -> { }))
+                .toArray(CompletableFuture[]::new)).get();
         return true;
     }
 
     private Map<Long, byte[]> get(Collection<Long> gets) throws ExecutionException, InterruptedException {
-        Map<Long,byte[]> map = new ConcurrentHashMap<>();
+        Map<Long,byte[]> hashMap = new HashMap<>();
+
         int transaction = getNextTransactionId();
         Long[] array = (Long[]) gets.toArray();
         Arrays.sort(array);
         List<Address> workersConfirm = new ArrayList<>();
 
         for (Long key : array){
-            if(getRequest(transaction,key)){
+            if(getRequest(transaction,key,hashMap)){
                 workersConfirm.add(workers[getWorkerIndex(key)]);
             }
             else{
-                List<CompletableFuture<Void>> futuresCancel = workersConfirm.stream()
-                        .map( r -> rollbackRequest(r,transaction))
-                        .collect(Collectors.toList());
-                CompletableFuture.allOf(futuresCancel.toArray(new CompletableFuture[futuresCancel.size()])).get();
+                CompletableFuture.allOf(workersConfirm.stream()
+                        .map(r -> rollbackRequest(r, transaction))
+                        .toArray(CompletableFuture[]::new)).get();
                 return null;
             }
         }
 
-       List<CompletableFuture<byte[]>> futures = gets.stream()
-               .map(key -> getCommit(transaction,key).thenApply(r -> map.put(key,r)))
-               .collect(Collectors.toList());
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).get();
+        CompletableFuture.allOf(gets.stream()
+                .map(key -> getCommit(transaction, key).thenRun(() -> { }))
+                .toArray(CompletableFuture[]::new)).get();
 
         /*
         for (Long g : array){
@@ -119,35 +118,40 @@ public class Coordinator {
         }
         */
 
-        return new HashMap<Long,byte[]>(map);
+        return hashMap;
     }
 
-    private Boolean getRequest (int transactionId, Long key) throws ExecutionException, InterruptedException {
-            return request(transactionId, key,  null,  Tuple.Type.PREPARED,  Tuple.Request.GET)
-                    .thenApply((r) -> {
-                             Tuple t = s.decode(r);
-                             return t.getMsg().equals(OK);
-                         }).get();
+    private Boolean getRequest (int transactionId, Long key, Map<Long,byte[]> map) throws ExecutionException, InterruptedException {
+        return preparedRequest(transactionId,key,null,Tuple.Request.GET,(r) ->{
+            Tuple t = s.decode(r);
+            if (t.getMsg().equals(OK)){
+                map.put(t.getKey(),t.getValue());
+                return true;
+            }
+            return false;
+        });
     }
 
     private Boolean putRequest (int transactionId, Long key, byte[] value) throws ExecutionException, InterruptedException {
-        return request(transactionId, key,  value,  Tuple.Type.PREPARED,  Tuple.Request.PUT)
-                .thenApply((r) -> {
+        return preparedRequest(transactionId,key,value,Tuple.Request.PUT,(r) ->{
                     Tuple t = s.decode(r);
                     return t.getMsg().equals(OK);
-                }).get();
-    }
-
-    private CompletableFuture<byte[]> getCommit (int transactionId, Long key) {
-        return request(transactionId, key,  null,  Tuple.Type.COMMIT,  Tuple.Request.GET)
-                .thenApply((r) -> {
-                    Tuple t = s.decode(r);
-                    return t.getValue();
                 });
     }
 
+
+    private Boolean preparedRequest (int transactionId, Long key, byte[] value, Tuple.Request request, Predicate<byte []> consumer) throws ExecutionException, InterruptedException {
+        return request(transactionId, key,  value,  Tuple.Type.PREPARED, request)
+                .thenApply(consumer::test).get();
+    }
+
+    private CompletableFuture<Void> getCommit (int transactionId, Long key) {
+        return channel.sendAsync(workers[getWorkerIndex(key)],"Tuple",s.encode(
+                new Tuple(key,null,Tuple.Type.COMMIT,Tuple.Request.GET,transactionId)));
+    }
+
     private CompletableFuture<Void> putCommit (int transactionId, Long key) {
-        return channel.sendAsync(workers[getWorkerIndex(key)],"tuple",s.encode(
+        return channel.sendAsync(workers[getWorkerIndex(key)],"Tuple",s.encode(
                 new Tuple(key,null,Tuple.Type.COMMIT,Tuple.Request.PUT,transactionId)));
     }
 
