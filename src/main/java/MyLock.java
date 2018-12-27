@@ -1,18 +1,23 @@
+
+import javafx.util.Pair;
+
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 public class MyLock {
 
-    List<CompletableFuture<Void>> next; // o acesso tem que ser atomico
+    LinkedHashMap<Integer,CompletableFuture<Void>> next; // o acesso tem que ser atomico
+    Integer current_transactio;
 
 
-    CompletableFuture<Void> lock(){
-
+    CompletableFuture<Void> lock(Integer id){
         CompletableFuture<Void> cf = new CompletableFuture<>();
         if( next.isEmpty() )
             cf.complete(null);
         else
-            next.add( cf);
+            next.put(id, cf);
         return cf;
     }
 
