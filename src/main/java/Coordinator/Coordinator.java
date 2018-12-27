@@ -58,6 +58,8 @@ public class Coordinator {
                 e.printStackTrace();
             }
         },es);
+
+        this.channel.start();
     }
 
     private Boolean put(Map<Long,byte[]> values) throws ExecutionException, InterruptedException {
