@@ -1,6 +1,22 @@
 package Serializers;
 
-public class Tuple {
+
+public class Tuple implements Transaction {
+
+    @Override
+    public int getId() {
+        return this.transId;
+    }
+
+    @Override
+    public boolean isCommit() {
+        return Type.COMMIT.equals( this.msg );
+    }
+
+    @Override
+    public boolean isRollback() {
+        return Type.ROLLBACK.equals( this.msg );
+    }
 
     public enum Type {
         ROLLBACK,
@@ -47,7 +63,4 @@ public class Tuple {
         return msg;
     }
 
-    public int getTransId() {
-        return transId;
-    }
 }
