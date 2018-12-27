@@ -5,6 +5,7 @@ import io.atomix.cluster.messaging.ManagedMessagingService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
+import io.atomix.utils.serializer.SerializerBuilder;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -32,10 +33,14 @@ public class Coordinator {
         this.myId = myId;
         this.channel = NettyMessagingService.builder().withAddress(coordinators[myId]).build();
         this.es = Executors.newSingleThreadExecutor();
-        this.s = Serializer.builder().addType(Tuple.class).build();
+        this.s = Serializer.builder()
+                .addType(Tuple.Request.class)
+                .addType(Tuple.Type.class)
+                .addType(Tuple.class)
+                .build();
 
-        Serializer reqPutSer = Serializer.builder().addType(RequestPut.class).build();
-        Serializer respPutSer = Serializer.builder().addType(ResponsePut.class).build();
+        Serializer reqPutSer = new SerializerBuilder().addType(Map.class).addType(RequestPut.class).build();
+        Serializer respPutSer = new SerializerBuilder().addType(Boolean.class).addType(ResponsePut.class).build();
 
         channel.registerHandler( "put", (o, m) -> {
             RequestPut requestPut = reqPutSer.decode(m);
@@ -43,9 +48,8 @@ public class Coordinator {
             channel.sendAsync(o,"responsePut",respPutSer.encode(new ResponsePut(b)));
         },es);
 
-
-        Serializer reqGetSer= Serializer.builder().addType(RequestGet.class).build();
-        Serializer respGetSer = Serializer.builder().addType(ResponseGet.class).build();
+        Serializer reqGetSer= new SerializerBuilder().addType(Collection.class).addType(RequestGet.class).build();
+        Serializer respGetSer =new SerializerBuilder().addType(Map.class).addType(ResponseGet.class).build();
 
         channel.registerHandler( "get", (o, m) -> {
             RequestGet requestGet = reqGetSer.decode(m);
