@@ -8,10 +8,13 @@ import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 import io.atomix.utils.serializer.SerializerBuilder;
-import java.util.*;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 
-class Worker {
+public class Worker {
 
     private final ManagedMessagingService channel;
     private final ExecutorService executorService;
@@ -22,7 +25,7 @@ class Worker {
 
 
 
-    Worker(int myId,  Address myAddr) throws ExecutionException, InterruptedException {
+    public Worker(int myId,  Address myAddr) throws ExecutionException, InterruptedException {
 
 
         ///////////////// Initiation  /////////////////
@@ -107,8 +110,35 @@ class Worker {
 
             if(msg.equals(Tuple.Type.ROLLBACK)){
 
+                List<Tuple> listTuple = transactionsActions.remove(tuple.getId());
+
+                for (Tuple t: listTuple) {
+
+                    locks.get(t.getKey()).unlock();
+
+                }
+
             }
+
             if(msg.equals(Tuple.Type.COMMIT)){
+
+                List<Tuple> listTuple = transactionsActions.get(tuple.getId());
+
+                for (Tuple t: listTuple) {
+
+                    if(t.getRequest().equals(Tuple.Request.PUT)){
+                        myHashMap.put(t.getKey(), t.getValue());
+                    }
+
+                }
+
+                transactionsActions.remove(tuple.getId());
+
+                for (Tuple t: listTuple) {
+
+                    locks.get(t.getKey()).unlock();
+
+                }
 
             }
 
