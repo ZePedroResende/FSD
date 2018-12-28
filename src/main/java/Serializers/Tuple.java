@@ -3,21 +3,6 @@ package Serializers;
 
 public class Tuple implements Transaction {
 
-    @Override
-    public int getId() {
-        return this.transId;
-    }
-
-    @Override
-    public boolean isCommit() {
-        return Type.COMMIT.equals( this.msg );
-    }
-
-    @Override
-    public boolean isRollback() {
-        return Type.ROLLBACK.equals( this.msg );
-    }
-
     public enum Type {
         ROLLBACK,
         COMMIT,
@@ -47,6 +32,30 @@ public class Tuple implements Transaction {
         this.transId = transId;
     }
 
+    public Tuple( Tuple origin, byte[] value, Type msg) {
+         this.key =  origin.getKey();
+         this.value = value;
+         this.msg = msg;
+         this.request = origin.getRequest();
+         this.transId = origin.getId();
+    }
+
+    @Override
+    public int getId() {
+        return this.transId;
+    }
+
+    @Override
+    public boolean isCommit() {
+        return Type.COMMIT.equals( this.msg );
+    }
+
+    @Override
+    public boolean isRollback() {
+        return Type.ROLLBACK.equals( this.msg );
+    }
+
+
     public long getKey() {
         return key;
     }
@@ -63,4 +72,25 @@ public class Tuple implements Transaction {
         return msg;
     }
 
+    @Override
+    public String toString() {
+
+        StringBuilder sb = new StringBuilder();
+
+        sb.append( "Id: " ).append( transId)
+                                .append(" - ")
+                                .append( msg);
+
+        if( ! msg.equals(Type.ROLLBACK) && ! msg.equals(Type.COMMIT) ){
+
+            sb.append("  ").append( request );
+
+            if( request.equals(Request.GET) && msg.equals(Type.PREPARED))
+                sb.append(" " + key);
+            if( request.equals( Request.PUT) || ( request.equals(Request.GET) && msg.equals(Type.OK)) )
+                sb.append(" " + key).append(" -> ").append( new String( value) );
+        }
+
+        return sb.toString();
+        }
 }
