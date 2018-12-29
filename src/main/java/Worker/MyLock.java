@@ -3,7 +3,7 @@ package Worker;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
-public class MyLock {
+class MyLock {
 
     private Queue< CompletableFuture<Void> > queue;
 
@@ -13,15 +13,19 @@ public class MyLock {
 
     public synchronized void lock( CompletableFuture<Void> cf ){
 
-        queue.add(cf);
+        if( ! queue.add(cf))
+            System.out.println("LOCK ERROR!!! ");
+
         if( queue.size() == 1 )
             cf.complete(null);
-
     }
 
     public synchronized void unlock() {
+
+        queue.remove();
+
         if( ! queue.isEmpty() )
-            queue.poll().complete(null);
+            queue.element().complete(null);
     }
 
 }

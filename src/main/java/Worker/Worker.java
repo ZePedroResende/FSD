@@ -17,7 +17,6 @@ import java.util.concurrent.*;
 public class Worker {
 
     private final ManagedMessagingService channel;
-    private final ExecutorService executorService;
 
     private Map<Long, byte[]> myHashMap;
     private Map<Long, MyLock> locks;
@@ -40,16 +39,15 @@ public class Worker {
                 .addType(Tuple.class)
                 .build();
 
-        this.executorService = Executors.newSingleThreadExecutor();
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
 
         this.channel = NettyMessagingService.builder()
                 .withAddress( myAddr )
                 .build();
 
-        Journal journal = new Journal( "worker"+myId, serializerTuple);
-
-
         ///////////////// Recover  //////////////////
+        /*
+        Journal journal = new Journal( "worker"+myId, serializerTuple);
 
         System.out.println("[W" + myId + "] Start recover");
 
@@ -64,7 +62,7 @@ public class Worker {
         this.mapToString("[W"+ myId +"]");
 
         System.out.println("[W" + myId + "] Finnish recover");
-
+        */
 
         ///////////////// Handlers  /////////////////
 
@@ -72,7 +70,7 @@ public class Worker {
 
             Tuple tuple = serializerTuple.decode(m);
 
-            System.out.println("[W"+ myId + "] <= received " + tuple.toString() );
+            System.out.println("[W"+ myId + "] <== " + tuple.toString() );
 
             Tuple.Type msg = tuple.getMsg();
 
@@ -80,27 +78,30 @@ public class Worker {
 
                 CompletableFuture<Void> cf;
 
-                cf = new CompletableFuture<>().thenRun(() ->{
+                cf = new CompletableFuture<>();
+
+                cf.thenRun( () ->{
                     Tuple tupleReply;
 
                     if( tuple.getRequest().equals( Tuple.Request.GET )){
+
                         byte[] valeu = myHashMap.get( tuple.getKey() );
                         tupleReply = new Tuple( tuple, valeu,  valeu == null ? Tuple.Type.ROLLBACK : Tuple.Type.OK);
                     }else
                         tupleReply = new Tuple( tuple, tuple.getValue(), Tuple.Type.OK);
 
                     channel.sendAsync(o, "Tuple", serializerTuple.encode(tupleReply));
+
+                    System.out.println("[W"+ myId + "] ==> " + tupleReply.toString() );
                 });
 
-                if( ! transactionsActions.containsKey( tuple.getId()) ) {
-                    List<Tuple> l = new ArrayList<>();
-                    this.transactionsActions.put(tuple.getId(), l);
-                }
+                if( ! transactionsActions.containsKey( tuple.getId()) )
+                    this.transactionsActions.put( tuple.getId(), new ArrayList<>() );
 
                 transactionsActions.get( tuple.getId() ).add( tuple );
 
                 if( ! locks.containsKey( tuple.getKey() ) )
-                    locks.put( tuple.getKey(), new MyLock());
+                    locks.put( tuple.getKey(), new MyLock() );
 
                 MyLock myLock = locks.get( tuple.getKey() );
 
@@ -122,28 +123,27 @@ public class Worker {
 
             if(msg.equals(Tuple.Type.COMMIT)){
 
-                List<Tuple> listTuple = transactionsActions.get(tuple.getId());
+                if( ! transactionsActions.containsKey( tuple.getId()) ){
+                    System.out.println("[W"+ myId+"] ERROR - received a commit for a absent transaction");
+                }else {
 
-                for (Tuple t: listTuple) {
+                    List<Tuple> listTuple = transactionsActions.get( tuple.getId() );
 
-                    if(t.getRequest().equals(Tuple.Request.PUT)){
-                        myHashMap.put(t.getKey(), t.getValue());
-                    }
+                    for (Tuple t : listTuple)
+                        if ( t.getRequest().equals(Tuple.Request.PUT))
+                            myHashMap.put( t.getKey(), t.getValue());
+
+                    transactionsActions.remove( tuple.getId() );
+
+                    for (Tuple t: listTuple)
+                        locks.get( t.getKey() ).unlock();
 
                 }
-
-                transactionsActions.remove(tuple.getId());
-
-                for (Tuple t: listTuple) {
-
-                    locks.get(t.getKey()).unlock();
-
-                }
-
             }
 
         }, executorService);
 
+        this.channel.start().get();
     }
 
     public String mapToString(String info) {

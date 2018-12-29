@@ -32,10 +32,10 @@ public class Tuple implements Transaction {
         this.transId = transId;
     }
 
-    public Tuple( Tuple origin, byte[] value, Type msg) {
+    public Tuple( Tuple origin, byte[] newValue, Type mewMsg) {
          this.key =  origin.getKey();
-         this.value = value;
-         this.msg = msg;
+         this.value = newValue;
+         this.msg = mewMsg;
          this.request = origin.getRequest();
          this.transId = origin.getId();
     }
