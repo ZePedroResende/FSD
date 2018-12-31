@@ -57,7 +57,7 @@ public class APITest extends Thread {
     }
 
     private int test2(){
-
+        return 0;
     }
 
 }

@@ -24,6 +24,7 @@ public class Coordinator {
     private final int myId;
     private final ExecutorService es;
     private final Serializer s;
+    private final ManagedMessagingService channel2;
 
     private int numberOfTrans;
 
@@ -32,7 +33,8 @@ public class Coordinator {
         this.workers = workers;
         this.myId = myId;
         this.channel = NettyMessagingService.builder().withAddress(coordinators[myId]).build();
-        this.es = Executors.newSingleThreadExecutor();
+        this.channel2 = NettyMessagingService.builder().withAddress(Address.from(2500)).build();
+        this.es = Executors.newFixedThreadPool(5);
         this.s = Serializer.builder()
                 .addType(Tuple.Request.class)
                 .addType(Tuple.Type.class)
@@ -43,6 +45,7 @@ public class Coordinator {
         Serializer respPutSer = new SerializerBuilder().addType(Boolean.class).addType(ResponsePut.class).build();
 
         channel.registerHandler( "put", (o, m) -> {
+            System.out.println("PUT");
             RequestPut requestPut = reqPutSer.decode(m);
             Boolean b = put(requestPut.getValues());
             channel.sendAsync(o,"responsePut",respPutSer.encode(new ResponsePut(b)));
@@ -52,6 +55,7 @@ public class Coordinator {
         Serializer respGetSer =new SerializerBuilder().addType(Map.class).addType(ResponseGet.class).build();
 
         channel.registerHandler( "get", (o, m) -> {
+            System.out.println("GET");
             RequestGet requestGet = reqGetSer.decode(m);
             Map<Long,byte[]> map = get(requestGet.getValues());
             channel.sendAsync(o,"responseGet",respGetSer.encode(new ResponseGet(map)));
@@ -61,10 +65,12 @@ public class Coordinator {
     }
 
     private Boolean put(Map<Long,byte[]> values) {
-        Long[] array = (Long[]) values.keySet().toArray();
+        Set<Long> l = values.keySet();
+        Long[] array =  l.toArray(new Long[l.size()]);
 
-        return getLocks(array, (transaction, key) -> putRequest(transaction, key, values.get(key)), Tuple.Request.PUT)
+        final boolean b = getLocks(array, (transaction, key) -> putRequest(transaction, key, values.get(key)), Tuple.Request.PUT)
                 != null;
+        return b;
     }
 
     private Map<Long, byte[]> get(Collection<Long> gets) {
