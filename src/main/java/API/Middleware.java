@@ -15,46 +15,71 @@ import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Consumer;
 
 
 public class Middleware {
-    private Address[] addresses = {Address.from("localhost:12345")
-            ,Address.from("localhost:12346"), Address.from("localhost:12347")
-            ,Address.from("localhost:12348"),Address.from("localhost:12349")};
-    private ManagedMessagingService channel;
 
-    private Serializer requestPutS = new Serializer.builder().addType(Map.class).addType(RequestPut.class).build();
-    private Serializer responsePutS = new SerializerBuilder().addType(Boolean.class).addType(ResponsePut.class).build();
-    private Serializer requestGetS = new SerializerBuilder().addType(Collection.class).addType(RequestGet.class).build();
-    private Serializer responseGetS = new SerializerBuilder().addType(Map.class).addType(ResponseGet.class).build();
-    private ExecutorService es;
+    private static int  NUMCOORD = 1;
+    private static int DEFAULTPORT = 12345;
 
-    public Middleware(Address[] addresses, String client) {
+    private static Address[] addresses;
+    private static final Serializer s = new SerializerBuilder().addType(RequestPut.class)
+                                                               .addType(RequestGet.class)
+                                                               .addType(ResponsePut.class)
+                                                               .addType(ResponseGet.class)
+                                                               .build();
+
+    private static void configure(){
+        /*  deve ser carregado o ficheiro conif a alterar
+                -> NUMCOORD
+        */
+
+        addresses = new Address[ NUMCOORD ];
+
+        for( int i = 0; i < NUMCOORD; i ++ )
+            addresses[i] = Address.from( String.format("localhost:1%04d", i) );
+    }
+
+    /* Nao faz sentido deixares o utilizador configurar  ( ????? )
+
+    public Middleware( Address[] addresses, String client) {
         this.addresses = addresses;
         this.channel = NettyMessagingService.builder()
                 .withAddress(Address.from(client))
                 .build();
         this.es = Executors.newSingleThreadExecutor();
+    } */
+
+    private ManagedMessagingService channel;
+    private ExecutorService es;
+
+    public Middleware(String port) {
+        this.channel = NettyMessagingService.builder()
+                .withAddress(Address.from( "localhost:" + port ))
+                .build();
+        this.es = Executors.newSingleThreadExecutor();
     }
 
-    public Middleware(String client) {
+    public Middleware() {
         this.channel = NettyMessagingService.builder()
-                .withAddress(Address.from(client))
+                .withAddress(Address.from( "localhost:" + DEFAULTPORT ))
                 .build();
         this.es = Executors.newSingleThreadExecutor();
     }
 
     public CompletableFuture<Boolean> put(Map<Long,byte[]> values){
+
         int rnd = new Random().nextInt(addresses.length);
-        return channel.sendAndReceive(addresses[rnd], "put", requestPutS.encode(new RequestPut(values)), es)
-                .thenApply((i) -> {
-                    ResponsePut response = responsePutS.decode(i);
+      
+        return channel.sendAndReceive( addresses[rnd], "put", s.encode( new RequestPut(values) ), es)
+                .thenApply( (i) -> {
+                    ResponsePut response = s.decode(i);
+
                     return response.getResponse() ;
                 });
     }
 
-    public CompletableFuture<Map<Long,byte[]>> get(Collection<Long> keys){
+    public CompletableFuture< Map<Long,byte[]> > get(Collection<Long> keys){
 
         int rnd = new Random().nextInt(addresses.length);
 

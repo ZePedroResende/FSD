@@ -9,12 +9,11 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 public class API {
+
     public static Middleware middleware;
 
     public static void main(String[] args){
         Middleware middleware = new Middleware(args[0]);
-
-
     }
 
     public CompletableFuture<Boolean> put(Map<Long,byte[]> values){
