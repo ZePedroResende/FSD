@@ -8,7 +8,6 @@ import io.atomix.cluster.messaging.ManagedMessagingService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
-import io.atomix.utils.serializer.SerializerBuilder;
 
 import java.util.Collection;
 import java.util.Map;
@@ -71,10 +70,11 @@ public class Middleware {
     public CompletableFuture<Boolean> put(Map<Long,byte[]> values){
 
         int rnd = new Random().nextInt(addresses.length);
-
+      
         return channel.sendAndReceive( addresses[rnd], "put", s.encode( new RequestPut(values) ), es)
                 .thenApply( (i) -> {
                     ResponsePut response = s.decode(i);
+
                     return response.getResponse() ;
                 });
     }
@@ -83,9 +83,9 @@ public class Middleware {
 
         int rnd = new Random().nextInt(addresses.length);
 
-        return channel.sendAndReceive(addresses[rnd], "get", s.encode(new RequestGet(keys)), es)
+        return channel.sendAndReceive(addresses[rnd], "get", requestGetS.encode(new RequestGet(keys)), es)
                 .thenApply((i) -> {
-                    ResponseGet response = s.decode(i);
+                    ResponseGet response = responseGetS.decode(i);
                     return response.getResponse();
                 });
     }
