@@ -33,7 +33,7 @@ public class Coordinator {
         this.workers = workers;
         this.myId = myId;
         this.channel = NettyMessagingService.builder().withAddress(coordinators[myId]).build();
-        this.es = Executors.newFixedThreadPool(5);
+        this.es = Executors.newSingleThreadExecutor();
         this.s = Serializer.builder()
                 .addType(Tuple.Request.class)
                 .addType(Tuple.Type.class)
@@ -132,7 +132,7 @@ public class Coordinator {
             return channel.sendAndReceive(
                     workers[getWorkerIndex(key)],
                     "Tuple",
-                    s.encode(new Tuple(key, value , Tuple.Type.PREPARED, request, transactionId))
+                    s.encode(new Tuple(key, value , Tuple.Type.PREPARED, request, transactionId)),es
                     )
                     .thenApply(consumer::test).get();
         } catch (InterruptedException | ExecutionException e) {
