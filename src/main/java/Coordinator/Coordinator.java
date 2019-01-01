@@ -7,6 +7,7 @@ import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 import io.atomix.utils.serializer.SerializerBuilder;
 
+import java.lang.reflect.Array;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -32,7 +33,7 @@ public class Coordinator {
         this.workers = workers;
         this.myId = myId;
         this.channel = NettyMessagingService.builder().withAddress(coordinators[myId]).build();
-        this.es = Executors.newSingleThreadExecutor();
+        this.es = Executors.newFixedThreadPool(5);
         this.s = Serializer.builder()
                 .addType(Tuple.Request.class)
                 .addType(Tuple.Type.class)
@@ -43,32 +44,36 @@ public class Coordinator {
         Serializer respPutSer = new SerializerBuilder().addType(Boolean.class).addType(ResponsePut.class).build();
 
         channel.registerHandler( "put", (o, m) -> {
+            System.out.println("PUT");
             RequestPut requestPut = reqPutSer.decode(m);
             Boolean b = put(requestPut.getValues());
-            channel.sendAsync(o,"responsePut",respPutSer.encode(new ResponsePut(b)));
+            return respPutSer.encode(new ResponsePut(b));
         },es);
 
         Serializer reqGetSer= new SerializerBuilder().addType(Collection.class).addType(RequestGet.class).build();
         Serializer respGetSer =new SerializerBuilder().addType(Map.class).addType(ResponseGet.class).build();
 
         channel.registerHandler( "get", (o, m) -> {
+            System.out.println("GET");
             RequestGet requestGet = reqGetSer.decode(m);
             Map<Long,byte[]> map = get(requestGet.getValues());
-            channel.sendAsync(o,"responseGet",respGetSer.encode(new ResponseGet(map)));
+            return respGetSer.encode(new ResponseGet(map));
         },es);
 
         this.channel.start();
     }
 
     private Boolean put(Map<Long,byte[]> values) {
-        Long[] array = (Long[]) values.keySet().toArray();
+        Set<Long> l = values.keySet();
+        Long[] array =  l.toArray(new Long[l.size()]);
 
         return getLocks(array, (transaction, key) -> putRequest(transaction, key, values.get(key)), Tuple.Request.PUT)
                 != null;
     }
 
     private Map<Long, byte[]> get(Collection<Long> gets) {
-        Long[] array = (Long[]) gets.toArray();
+        Long[] array =  gets.toArray(new Long[gets.size()]);
+
         Map<Long,byte[]> hashMap = new HashMap<>();
 
         return getLocks(array,(transaction, key) ->getRequest(transaction,key,hashMap),Tuple.Request.GET)
@@ -127,8 +132,8 @@ public class Coordinator {
             return channel.sendAndReceive(
                     workers[getWorkerIndex(key)],
                     "Tuple",
-                    s.encode(new Tuple(key, value , Tuple.Type.PREPARED, request, transactionId)),
-                    es)
+                    s.encode(new Tuple(key, value , Tuple.Type.PREPARED, request, transactionId))
+                    )
                     .thenApply(consumer::test).get();
         } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();

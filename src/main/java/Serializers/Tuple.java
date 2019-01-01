@@ -80,7 +80,6 @@ public class Tuple implements Transaction {
         sb.append( "Id: " ).append( transId)
                                 .append(" - ")
                                 .append( msg);
-
         if( ! msg.equals(Type.ROLLBACK) && ! msg.equals(Type.COMMIT) ){
 
             sb.append("  ").append( request );
@@ -88,9 +87,9 @@ public class Tuple implements Transaction {
             if( request.equals(Request.GET) && msg.equals(Type.PREPARED))
                 sb.append(" " + key);
             if( request.equals( Request.PUT) || ( request.equals(Request.GET) && msg.equals(Type.OK)) )
-                sb.append(" " + key).append(" -> ").append( new String( value) );
+                sb.append(" " + key).append(" -> ").append( value != null ? new String( value): "NULL" );
         }
 
         return sb.toString();
-        }
+    }
 }

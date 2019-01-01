@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.function.BiFunction;
 
 public class Worker {
 
@@ -66,7 +67,7 @@ public class Worker {
 
         ///////////////// Handlers  /////////////////
 
-        this.channel.registerHandler( "Tuple", (o, m) -> {
+        BiFunction<Address,byte[],byte[]> handler = (o, m) -> {
 
             Tuple tuple = serializerTuple.decode(m);
 
@@ -76,24 +77,9 @@ public class Worker {
 
             if( msg.equals( Tuple.Type.PREPARED) ){
 
-                CompletableFuture<Void> cf;
+                CompletableFuture<byte[]> cf;
 
-                cf = new CompletableFuture<>();
-
-                cf.thenRun( () ->{
-                    Tuple tupleReply;
-
-                    if( tuple.getRequest().equals( Tuple.Request.GET )){
-
-                        byte[] valeu = myHashMap.get( tuple.getKey() );
-                        tupleReply = new Tuple( tuple, valeu,  valeu == null ? Tuple.Type.ROLLBACK : Tuple.Type.OK);
-                    }else
-                        tupleReply = new Tuple( tuple, tuple.getValue(), Tuple.Type.OK);
-
-                    channel.sendAsync(o, "Tuple", serializerTuple.encode(tupleReply));
-
-                    System.out.println("[W"+ myId + "] ==> " + tupleReply.toString() );
-                });
+                cf = new CompletableFuture<byte[]>();
 
                 if( ! transactionsActions.containsKey( tuple.getId()) )
                     this.transactionsActions.put( tuple.getId(), new ArrayList<>() );
@@ -106,6 +92,26 @@ public class Worker {
                 MyLock myLock = locks.get( tuple.getKey() );
 
                 myLock.lock( cf);
+                try {
+                    return cf.thenApply((r) -> {
+                                Tuple tupleReply;
+
+                                if (tuple.getRequest().equals(Tuple.Request.GET)) {
+
+                                    byte[] valeu = myHashMap.get(tuple.getKey());
+                                    tupleReply = new Tuple(tuple, valeu, valeu == null ? Tuple.Type.ROLLBACK : Tuple.Type.OK);
+                                } else
+                                    tupleReply = new Tuple(tuple, tuple.getValue(), Tuple.Type.OK);
+
+                                System.out.println("[W" + myId + "] ==> " + tupleReply.toString());
+                                return serializerTuple.encode(tupleReply);
+                                //channel.sendAsync(o, "Tuple", serializerTuple.encode(tupleReply));
+
+                            }).get();
+                } catch (InterruptedException | ExecutionException e) {
+                    e.printStackTrace();
+                }
+
 
             }
 
@@ -141,7 +147,11 @@ public class Worker {
                 }
             }
 
-        }, executorService);
+            return null;
+
+        };
+
+        this.channel.registerHandler( "Tuple", handler , executorService);
 
         this.channel.start().get();
     }
