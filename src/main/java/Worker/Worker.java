@@ -67,7 +67,7 @@ public class Worker {
 
         ///////////////// Handlers  /////////////////
 
-        BiFunction<Address,byte[],byte[]> handler = (o, m) -> {
+        BiFunction<Address,byte[],CompletableFuture<byte[]>> handler = (o, m) -> {
 
             Tuple tuple = serializerTuple.decode(m);
 
@@ -92,7 +92,6 @@ public class Worker {
                 MyLock myLock = locks.get( tuple.getKey() );
 
                 myLock.lock( cf);
-                try {
                     return cf.thenApply((r) -> {
                                 Tuple tupleReply;
 
@@ -107,11 +106,7 @@ public class Worker {
                                 return serializerTuple.encode(tupleReply);
                                 //channel.sendAsync(o, "Tuple", serializerTuple.encode(tupleReply));
 
-                            }).get();
-                } catch (InterruptedException | ExecutionException e) {
-                    e.printStackTrace();
-                }
-
+                            });
 
             }
 
@@ -147,11 +142,11 @@ public class Worker {
                 }
             }
 
-            return null;
+            return new CompletableFuture<byte[]>();
 
         };
 
-        this.channel.registerHandler( "Tuple", handler , executorService);
+        this.channel.registerHandler( "Tuple", handler );
 
         this.channel.start().get();
     }
