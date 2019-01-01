@@ -17,6 +17,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 
 public class CoordinatorTest {
     private static final int SLEEPTIME = 200;
@@ -28,12 +29,12 @@ public class CoordinatorTest {
     private static Middleware api;
     private final ManagedMessagingService channel;
     private final ExecutorService executorService;
-    private final Serializer s;
+    private static Serializer s;
     private static Map<Long,byte[]> results;
 
-    public CoordinatorTest(Address myAddr, BiConsumer<Address, Tuple> handler) throws ExecutionException, InterruptedException {
+    public CoordinatorTest(Address myAddr, BiFunction<Address, byte[],byte[]> handler) throws ExecutionException, InterruptedException {
 
-        s = new SerializerBuilder()
+        this.s = new SerializerBuilder()
                 .addType(Serializers.Tuple.Type.class)
                 .addType(Serializers.Tuple.Request.class)
                 .addType(Tuple.class)
@@ -45,27 +46,25 @@ public class CoordinatorTest {
                 .withAddress(myAddr)
                 .build();
 
-        this.channel.registerHandler("Tuple", (o, m) -> {
-            handler.accept(o, s.decode(m));
-        }, executorService);
+        this.channel.registerHandler("Tuple", handler,executorService);
 
         this.channel.start().get();
     }
 
-    void sendRoolback(int id, Address addr){
+    byte[] sendRoolback(int id, Address addr){
         Tuple t = new Tuple(1,null, Tuple.Type.ROLLBACK, Tuple.Request.CANCEL,id);
-        channel.sendAsync(addr, "Tuple", s.encode( t ));
+        return s.encode( t );
     }
 
-    void sendOkget(int id, Address addr, Long key, byte[] value){
+    byte[] sendOkget(int id, Address addr, Long key, byte[] value){
         Tuple t = new Tuple(key,value, Tuple.Type.OK, Tuple.Request.GET, id);
-        channel.sendAsync(addr, "Tuple", s.encode( t ));
+        return  s.encode(t);
     }
 
-    void sendOkput(int id, Address addr,Long key){
+    byte[] sendOkput(int id, Address addr,Long key){
         Tuple t = new Tuple(key,null, Tuple.Type.OK, Tuple.Request.PUT, id);
             System.out.println("[OKPUT] <==  [" + addr + "]: " + t.toString());
-            channel.sendAsync(addr, "Tuple", s.encode( t ));
+        return s.encode(t);
     }
 
 
@@ -77,18 +76,18 @@ public class CoordinatorTest {
         numCoords = 1;
         Address[] workerAddress = {Address.from("localhost:12347")};
         Address[] coordAddress = {Address.from("localhost:1234")};
-        test = new CoordinatorTest(workerAddress[0],
-                (o, t) ->{
 
+        test = new CoordinatorTest(workerAddress[0],
+                (o, te) ->{
+                    Tuple t = s.decode(te);
                     System.out.println("[MAIN] <==  [" + o + "]: " + t.toString());
                     if(t.getMsg().equals(Tuple.Type.PREPARED)){
                         if(t.getRequest().equals(Tuple.Request.GET)){
-                            test.sendOkget(t.getId(),o,t.getKey(),results.get(t.getKey()));
+                           return test.sendOkget(t.getId(),o,t.getKey(),results.get(t.getKey()));
                         }
                         else{
                             results.put(t.getKey(),t.getValue());
-                            System.out.println("OLA");
-                            test.sendOkput(t.getId(),o,t.getKey());
+                           return test.sendOkput(t.getId(),o,t.getKey());
                         }
                     }
 
@@ -99,9 +98,9 @@ public class CoordinatorTest {
                     if(t.getMsg().equals(Tuple.Type.ROLLBACK)){
                         System.out.println("[ROLLBACK] <==  [" + o + "]: " + t.toString());
                     }
+                    return null;
 
                 });
-
         coordinators = new Coordinator[numCoords];
 
         for(int i = 0; i < numCoords; i ++ ){
@@ -134,18 +133,25 @@ public class CoordinatorTest {
 
         keys.add(new Long(1));
         CompletableFuture<Map<Long, byte[]>> result2 = api.get(keys);
-        if (!result2.get().equals(values)) {
+        Map<Long, byte[]> lol = result2.get();
+        byte[] lol1 = lol.get(new Long(1));
+        String out = new String(lol1);
+        if (!out.equals("ola")) {
             return 2;
         }
 
-        values.put(1, "ole".getBytes());
+        values.put(new Long(1), "ole".getBytes());
         result = api.put(values);
         if (!result.get()) {
             return 3;
         }
 
         result2 = api.get(keys);
-        if (!result2.get().equals(values)) {
+
+        lol = result2.get();
+        lol1 = lol.get(new Long(1));
+        out = new String(lol1);
+        if (!out.equals("ole")) {
             return 4;
         }
 
@@ -184,7 +190,6 @@ class Middleware {
     public CompletableFuture<Boolean> put(Map<Long,byte[]> values){
         return channel.sendAndReceive(address, "put", requestPutS.encode(new RequestPut(values)), Duration.ofMinutes(5) ,es)
                 .thenApply((i) -> {
-                    System.out.println("Response");
                     ResponsePut response = responsePutS.decode(i);
                     return response.getResponse() ;
                 });
