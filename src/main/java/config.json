@@ -1,8 +1,8 @@
 
 {
-  "debug" : 1,
+  "debug" : true,
   "defaultPort" : 12345,
-  "NumCoordinators" : 1,
-  "NumWorkers" : 1
+  "NumCoordinators" : 44,
+  "NumWorkers" : 3
 }
 

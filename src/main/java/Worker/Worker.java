@@ -13,9 +13,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 
 public class Worker {
+
+    private static final int NUMCOORD = 4;
+    private static final boolean DEBUG = true;
 
     private final ManagedMessagingService channel;
 
@@ -23,10 +27,7 @@ public class Worker {
     private Map<Long, MyLock> locks;
     private Map<Integer, List<Tuple>> transactionsActions;
 
-
-
     public Worker(int myId,  Address myAddr) throws ExecutionException, InterruptedException {
-
 
         ///////////////// Initiation  /////////////////
 
@@ -47,12 +48,12 @@ public class Worker {
                 .build();
 
         ///////////////// Recover  //////////////////
-        /*
-        Journal journal = new Journal( "worker"+myId, serializerTuple);
 
-        System.out.println("[W" + myId + "] Start recover");
+        Journal journal = new Journal( "worker"+ myId, serializerTuple);
 
-        List<Transaction> list =  journal.getCommitted().get();
+        if( DEBUG)  System.out.println("[W" + myId + "] Start recover");
+
+        List< Transaction > list =  journal.getCommitted().get();
 
         for( Transaction t : list){
             Tuple tuple = (Tuple) t;
@@ -60,95 +61,117 @@ public class Worker {
                 myHashMap.put( tuple.getKey(), tuple.getValue() );
         }
 
-        this.mapToString("[W"+ myId +"]");
+        list =  journal.getUnconfirmed().get();
 
-        System.out.println("[W" + myId + "] Finnish recover");
-        */
+        for( Transaction t : list){
+            Tuple tuple = (Tuple) t;
+            if( tuple.getMsg().equals(Tuple.Type.OK) ){
+
+                if( !  transactionsActions.containsKey( tuple.getId()) )
+                    transactionsActions.put( tuple.getId(), new ArrayList<>());
+
+                transactionsActions.get( tuple.getId()).add( tuple);
+
+                this.channel.sendAsync( getAddresFromId( tuple.getId()), "RETRY", serializerTuple.encode(tuple) );
+            }
+        }
+
+        if( DEBUG)  System.out.println("[W" + myId + "] Finnish recover");
+
 
         ///////////////// Handlers  /////////////////
 
-        BiFunction<Address,byte[],CompletableFuture<byte[]>> handler = (o, m) -> {
+        BiConsumer< Address, byte[]> handlerConfirm = (o, m) -> {
 
             Tuple tuple = serializerTuple.decode(m);
 
-            System.out.println("[W"+ myId + "] <== " + tuple.toString() );
+            journal.addSegment( tuple );
+
+            if( DEBUG)  System.out.println("[W"+ myId + "] <== " + tuple.toString() );
 
             Tuple.Type msg = tuple.getMsg();
-
-            if( msg.equals( Tuple.Type.PREPARED) ){
-
-                CompletableFuture<byte[]> cf;
-
-                cf = new CompletableFuture<byte[]>();
-
-                if( ! transactionsActions.containsKey( tuple.getId()) )
-                    this.transactionsActions.put( tuple.getId(), new ArrayList<>() );
-
-                transactionsActions.get( tuple.getId() ).add( tuple );
-
-                if( ! locks.containsKey( tuple.getKey() ) )
-                    locks.put( tuple.getKey(), new MyLock() );
-
-                MyLock myLock = locks.get( tuple.getKey() );
-
-                myLock.lock( cf);
-                    return cf.thenApply((r) -> {
-                                Tuple tupleReply;
-
-                                if (tuple.getRequest().equals(Tuple.Request.GET)) {
-
-                                    byte[] valeu = myHashMap.get(tuple.getKey());
-                                    tupleReply = new Tuple(tuple, valeu, valeu == null ? Tuple.Type.ROLLBACK : Tuple.Type.OK);
-                                } else
-                                    tupleReply = new Tuple(tuple, tuple.getValue(), Tuple.Type.OK);
-
-                                System.out.println("[W" + myId + "] ==> " + tupleReply.toString());
-                                return serializerTuple.encode(tupleReply);
-                                //channel.sendAsync(o, "Tuple", serializerTuple.encode(tupleReply));
-
-                            });
-
-            }
 
             if(msg.equals(Tuple.Type.ROLLBACK)){
 
                 List<Tuple> listTuple = transactionsActions.remove(tuple.getId());
 
-                for (Tuple t: listTuple) {
-
-                    locks.get(t.getKey()).unlock();
-
+                if( listTuple != null ){
+                    for (Tuple t: listTuple)
+                        locks.get(t.getKey()).unlock();
                 }
-
             }
 
             if(msg.equals(Tuple.Type.COMMIT)){
 
-                if( ! transactionsActions.containsKey( tuple.getId()) ){
-                    System.out.println("[W"+ myId+"] ERROR - received a commit for a absent transaction");
-                }else {
+                if( transactionsActions.containsKey( tuple.getId()) ){
 
-                    List<Tuple> listTuple = transactionsActions.get( tuple.getId() );
+                    List<Tuple> listTuple = transactionsActions.remove( tuple.getId() );
 
                     for (Tuple t : listTuple)
                         if ( t.getRequest().equals(Tuple.Request.PUT))
                             myHashMap.put( t.getKey(), t.getValue());
-
-                    transactionsActions.remove( tuple.getId() );
 
                     for (Tuple t: listTuple)
                         locks.get( t.getKey() ).unlock();
 
                 }
             }
-
-            return new CompletableFuture<byte[]>();
-
         };
 
-        this.channel.registerHandler( "Tuple", handler );
+        BiFunction< Address, byte[], CompletableFuture<byte[]>> handlerPrepare = (o, m) -> {
+
+            Tuple tuple = serializerTuple.decode(m);
+
+            journal.addSegment( tuple );
+
+            if( DEBUG)  System.out.println("[W"+ myId + "] <== " + tuple.toString() );
+
+            CompletableFuture<byte[]> cf;
+
+            cf = new CompletableFuture<>();
+
+            if( ! transactionsActions.containsKey( tuple.getId()) )
+                this.transactionsActions.put( tuple.getId(), new ArrayList<>() );
+
+            transactionsActions.get( tuple.getId() ).add( tuple );
+
+            if( ! locks.containsKey( tuple.getKey() ) )
+                locks.put( tuple.getKey(), new MyLock() );
+
+            MyLock myLock = locks.get( tuple.getKey() );
+
+            myLock.lock( cf);
+                return cf.thenApply((r) -> {
+
+                    Tuple tupleReply;
+
+                    if (tuple.getRequest().equals(Tuple.Request.GET)) {
+
+                        byte[] valeu = myHashMap.get(tuple.getKey());
+                        tupleReply = new Tuple(tuple, valeu, valeu == null ? Tuple.Type.ROLLBACK : Tuple.Type.OK);
+                    } else
+                        tupleReply = new Tuple(tuple, tuple.getValue(), Tuple.Type.OK);
+
+                    try {
+                        return serializerTuple.encode(tupleReply);
+                    }finally {
+                        journal.addSegment( tuple );
+
+                        if( DEBUG)  System.out.println("[W" + myId + "] ==> " + tupleReply.toString());
+                    }
+                });
+        };
+
+        this.channel.registerHandler( "PREPARE", handlerPrepare );
+
+        this.channel.registerHandler( "CONFIRM", handlerConfirm, executorService );
 
         this.channel.start().get();
+    }
+
+    private Address getAddresFromId(int id) {
+        int coord= id % NUMCOORD;
+        return Address.from(  String.format("localhost:11%03d", coord));
     }
 
     public String mapToString(String info) {
