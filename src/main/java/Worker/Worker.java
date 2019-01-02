@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.concurrent.locks.Lock;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 
@@ -71,6 +72,12 @@ public class Worker {
                     transactionsActions.put( tuple.getId(), new ArrayList<>());
 
                 transactionsActions.get( tuple.getId()).add( tuple);
+
+                MyLock ml = new MyLock();
+                locks.put( tuple.getKey(), ml );
+                CompletableFuture<byte[]> cf = new CompletableFuture<>();
+                ml.lock(cf);
+                cf.get();
 
                 this.channel.sendAsync( getAddresFromId( tuple.getId()), "RETRY", serializerTuple.encode(tuple) );
             }
