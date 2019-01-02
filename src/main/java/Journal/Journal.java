@@ -70,6 +70,17 @@ public class Journal {
         }
     }
 
+    public CompletableFuture< List<Transaction> > getLastUnconfirmed () {
+
+        CompletableFuture<List<Transaction>> cp = new CompletableFuture<>();
+
+        try{
+            return cp;
+        }finally {
+            cp.complete(getLastTransaction());
+        }
+    }
+
     private List<Transaction> filterLog( boolean flag) {
         // flag == true -> return just committed transactions
         // flag == false -> return just unconfirmed transactions
@@ -110,6 +121,26 @@ public class Journal {
         return  flag ?  committed : data.values().stream()
                                                  .flatMap( List::stream )
                                                  .collect(Collectors.toList());
+    }
+
+    private List<Transaction> getLastTransaction(){
+        List<Transaction> unconfirmed = new ArrayList<>();
+
+        if (writer != null) {
+            writer.close();
+            writer = null;
+            reader = j.openReader(0);
+        }
+
+        Transaction last = (Transaction) j.openReader(j.maxEntrySize()).getCurrentEntry();
+        if(last.isOk() || last.isPrepare()){
+            int id = last.getId();
+            unconfirmed = filterLog(false);
+            unconfirmed.removeIf(l -> l.getId() != id );
+            unconfirmed.removeIf(l -> l.isOk());
+        }
+
+        return unconfirmed;
     }
 }
 

@@ -8,4 +8,8 @@ public interface Transaction {
 
     boolean isRollback();
 
+    boolean isPrepare();
+
+    boolean isOk();
+
 }

@@ -1,5 +1,6 @@
 package Coordinator;
 
+import Journal.Journal;
 import Serializers.*;
 import io.atomix.cluster.messaging.ManagedMessagingService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
@@ -23,6 +24,7 @@ public class Coordinator {
     private final Serializer s;
     private int numberOfTrans;
     private Map<Integer,Boolean> oldTransactions;
+    private Journal journal;
 
     public Coordinator(Address[] coordinators , Address[] workers, int myId) {
         this.coordinators = coordinators;
@@ -36,6 +38,33 @@ public class Coordinator {
                 .addType(Tuple.class)
                 .build();
         this.oldTransactions = new ConcurrentHashMap<>();
+        this.journal = new Journal( "coordinator"+ myId, s);
+
+        List< Transaction > list = null;
+        try {
+            list = journal.getCommitted().get();
+
+            for( Transaction t : list) {
+                Tuple tuple = (Tuple) t;
+                if (tuple.getRequest().equals(Tuple.Request.PUT))
+                    oldTransactions.put(tuple.getId(), true);
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+        }
+
+
+        try {
+            list = journal.getLastUnconfirmed().get();
+
+            for (Transaction t : list) {
+                Tuple tuple = (Tuple) t;
+                rollbackRequest(workers[getWorkerIndex( tuple.getKey())],t.getId());
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+        }
+
 
         Serializer reqPutSer = new SerializerBuilder().addType(Map.class).addType(RequestPut.class).build();
         Serializer respPutSer = new SerializerBuilder().addType(Boolean.class).addType(ResponsePut.class).build();
@@ -93,6 +122,9 @@ public class Coordinator {
         List<Address> workersConfirm = new ArrayList<>();
 
         try {
+
+            Arrays.stream(array).forEach(l ->
+                    this.journal.addSegment(new Tuple(l,null, Tuple.Type.PREPARED,request,transaction)));
             for (Long key : array){
                 if(getLock.test(transaction,key)){
                     workersConfirm.add(workers[getWorkerIndex(key)]);
@@ -150,7 +182,10 @@ public class Coordinator {
     private CompletableFuture<Void> commitRequest (int transactionId, Address worker, Tuple.Request request) {
 
         return channel.sendAsync(worker,"CONFIRM",s.encode(
-                new Tuple(0,null, Tuple.Type.COMMIT,request,transactionId))).whenComplete((o,e) -> this.oldTransactions.put(transactionId,true));
+                new Tuple(0,null, Tuple.Type.COMMIT,request,transactionId))).whenComplete((o,e) ->{
+                    this.journal.addSegment(new Tuple(0,null, Tuple.Type.COMMIT,request,transactionId));
+                    this.oldTransactions.put(transactionId,true);
+        } );
     }
 
     private CompletableFuture<Void> rollbackRequest(Address address, int transactionId){

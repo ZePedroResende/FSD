@@ -55,6 +55,16 @@ public class Tuple implements Transaction {
         return Type.ROLLBACK.equals( this.msg );
     }
 
+    @Override
+    public boolean isPrepare() {
+        return Type.PREPARED.equals( this.msg );
+    }
+
+    @Override
+    public boolean isOk() {
+        return Type.OK.equals( this.msg );
+    }
+
 
     public long getKey() {
         return key;
@@ -92,4 +102,6 @@ public class Tuple implements Transaction {
 
         return sb.toString();
     }
+
+
 }
