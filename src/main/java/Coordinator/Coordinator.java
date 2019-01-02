@@ -56,11 +56,20 @@ public class Coordinator {
 
         try {
             list = journal.getLastUnconfirmed().get();
-
-            for (Transaction t : list) {
-                Tuple tuple = (Tuple) t;
-                rollbackRequest(workers[getWorkerIndex( tuple.getKey())],t.getId());
+            if(list.size() != 0){
+                if(list.get(0).isOk()){
+                    for (Transaction t : list) {
+                        Tuple tuple = (Tuple) t;
+                        commitRequest(t.getId(),workers[getWorkerIndex( tuple.getKey())],((Tuple) t).getRequest());
+                    }
+                }else{
+                    for (Transaction t : list) {
+                        Tuple tuple = (Tuple) t;
+                        rollbackRequest(workers[getWorkerIndex( tuple.getKey())],t.getId());
+                    }
+                }
             }
+
         } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
         }

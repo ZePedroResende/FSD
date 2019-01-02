@@ -125,6 +125,7 @@ public class Journal {
 
     private List<Transaction> getLastTransaction(){
         List<Transaction> unconfirmed = new ArrayList<>();
+        List<Transaction> aux ;
 
         if (writer != null) {
             writer.close();
@@ -133,11 +134,20 @@ public class Journal {
         }
 
         Transaction last = (Transaction) j.openReader(j.maxEntrySize()).getCurrentEntry();
-        if(last.isOk() || last.isPrepare()){
+        if(last.isCommit() ){
+            int id = last.getId();
+            unconfirmed = filterLog(true);
+            unconfirmed.removeIf(l -> l.getId() != id );
+            unconfirmed.removeIf(l -> l.isPrepare() || l.isRollback() || l.isCommit());
+        } else {
+
             int id = last.getId();
             unconfirmed = filterLog(false);
+            aux = new ArrayList<>(unconfirmed);
             unconfirmed.removeIf(l -> l.getId() != id );
-            unconfirmed.removeIf(l -> l.isOk());
+            unconfirmed.removeIf(l -> l.isPrepare());
+            aux.removeIf(l -> l.isOk());
+            if(unconfirmed.size() != aux.size()) unconfirmed = aux;
         }
 
         return unconfirmed;
