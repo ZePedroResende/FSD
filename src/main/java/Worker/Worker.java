@@ -77,9 +77,9 @@ public class Worker {
 
             if( msg.equals( Tuple.Type.PREPARED) ){
 
-                CompletableFuture<byte[]> cf;
+                CompletableFuture<Boolean> cf;
 
-                cf = new CompletableFuture<byte[]>();
+                cf = new CompletableFuture<Boolean>();
 
                 if( ! transactionsActions.containsKey( tuple.getId()) )
                     this.transactionsActions.put( tuple.getId(), new ArrayList<>() );
@@ -91,7 +91,7 @@ public class Worker {
 
                 MyLock myLock = locks.get( tuple.getKey() );
 
-                myLock.lock( cf);
+                myLock.lock(cf);
                     return cf.thenApply((r) -> {
                                 Tuple tupleReply;
 

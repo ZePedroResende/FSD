@@ -7,12 +7,8 @@ import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 import io.atomix.utils.serializer.SerializerBuilder;
 
-import java.lang.reflect.Array;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 
@@ -25,8 +21,8 @@ public class Coordinator {
     private final int myId;
     private final ExecutorService es;
     private final Serializer s;
-
     private int numberOfTrans;
+    private Map<Integer,Boolean> oldTransactions;
 
     public Coordinator(Address[] coordinators , Address[] workers, int myId) {
         this.coordinators = coordinators;
@@ -39,6 +35,7 @@ public class Coordinator {
                 .addType(Tuple.Type.class)
                 .addType(Tuple.class)
                 .build();
+        this.oldTransactions = new ConcurrentHashMap<>();
 
         Serializer reqPutSer = new SerializerBuilder().addType(Map.class).addType(RequestPut.class).build();
         Serializer respPutSer = new SerializerBuilder().addType(Boolean.class).addType(ResponsePut.class).build();
@@ -58,6 +55,16 @@ public class Coordinator {
             RequestGet requestGet = reqGetSer.decode(m);
             Map<Long,byte[]> map = get(requestGet.getValues());
             return respGetSer.encode(new ResponseGet(map));
+        },es);
+
+        channel.registerHandler("RETRY",  (o, m) -> {
+            Tuple t = this.s.decode(m);
+            if(t.getId() < this.numberOfTrans){
+                if(this.oldTransactions.containsKey(t.getId()))
+                    commitRequest(t.getId(),o, t.getRequest());
+                else
+                    rollbackRequest(o,t.getId());
+            }
         },es);
 
         this.channel.start();
@@ -131,23 +138,23 @@ public class Coordinator {
         try {
             return channel.sendAndReceive(
                     workers[getWorkerIndex(key)],
-                    "Tuple",
+                    "PREPARE",
                     s.encode(new Tuple(key, value , Tuple.Type.PREPARED, request, transactionId)),es
                     )
                     .thenApply(consumer::test).get();
         } catch (InterruptedException | ExecutionException e) {
-            e.printStackTrace();
+            return  false;
         }
-        return  false;
     }
 
     private CompletableFuture<Void> commitRequest (int transactionId, Address worker, Tuple.Request request) {
-        return channel.sendAsync(worker,"Tuple",s.encode(
-                new Tuple(0,null, Tuple.Type.COMMIT,request,transactionId)));
+
+        return channel.sendAsync(worker,"CONFIRM",s.encode(
+                new Tuple(0,null, Tuple.Type.COMMIT,request,transactionId))).whenComplete((o,e) -> this.oldTransactions.put(transactionId,true));
     }
 
     private CompletableFuture<Void> rollbackRequest(Address address, int transactionId){
-        return channel.sendAsync(address,"Tuple",s.encode(
+        return channel.sendAsync(address,"CONFIRM",s.encode(
                 new Tuple(0,null, Tuple.Type.ROLLBACK, Tuple.Request.CANCEL, transactionId)));
     }
 
