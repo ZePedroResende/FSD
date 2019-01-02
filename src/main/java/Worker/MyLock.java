@@ -5,13 +5,13 @@ import java.util.concurrent.CompletableFuture;
 
 class MyLock {
 
-    private Queue< CompletableFuture<byte[]> > queue;
+    private Queue< CompletableFuture<Boolean>> queue;
 
     MyLock(){
         queue = new LinkedList<>();
     }
 
-    public synchronized void lock( CompletableFuture<byte[]> cf ){
+    public synchronized void lock( CompletableFuture<Boolean> cf ){
 
         if( ! queue.add(cf))
             System.out.println("LOCK ERROR!!! ");
