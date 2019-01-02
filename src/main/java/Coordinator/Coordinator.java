@@ -57,6 +57,7 @@ public class Coordinator {
         try {
             list = journal.getLastUnconfirmed().get();
             if(list.size() != 0){
+                numberOfTrans =  list.get(list.size() -1).getId() + 1;
                 if(list.get(0).isOk()){
                     for (Transaction t : list) {
                         Tuple tuple = (Tuple) t;

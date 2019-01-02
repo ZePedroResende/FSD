@@ -134,6 +134,7 @@ public class Journal {
         }
 
         Transaction last = (Transaction) j.openReader(j.maxEntrySize()).getCurrentEntry();
+        if(last == null) return unconfirmed;
         if(last.isCommit() ){
             int id = last.getId();
             unconfirmed = filterLog(true);
