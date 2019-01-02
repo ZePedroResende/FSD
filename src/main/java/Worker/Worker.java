@@ -67,7 +67,7 @@ public class Worker {
         for( Transaction t : list){
             Tuple tuple = (Tuple) t;
             if( tuple.getMsg().equals(Tuple.Type.OK) ){
-
+              
                 if( !  transactionsActions.containsKey( tuple.getId()) )
                     transactionsActions.put( tuple.getId(), new ArrayList<>());
 
@@ -85,7 +85,7 @@ public class Worker {
 
         if( DEBUG)  System.out.println("[W" + myId + "] Finnish recover");
 
-
+      
         ///////////////// Handlers  /////////////////
 
         BiConsumer< Address, byte[]> handlerConfirm = (o, m) -> {
