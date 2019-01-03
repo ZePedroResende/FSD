@@ -1,5 +1,6 @@
 package API;
 
+import Config.Config;
 import Serializers.*;
 import io.atomix.cluster.messaging.ManagedMessagingService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
@@ -19,7 +20,6 @@ public class Middleware {
         It isn't Thread safe
      */
 
-    private static int NUMCOORD = 1;
 
     private Address[] addresses;
     private Map<Integer, CompletableFuture<Boolean>> putsWaiting;
@@ -43,7 +43,9 @@ public class Middleware {
         startUp( client );
     }
 
-    public Middleware(String client) throws Exception {
+    public Middleware(String client, Config config) throws Exception {
+
+        int NUMCOORD = config.getNumCoordinators();
 
         this.addresses = new Address[ NUMCOORD ];
 

@@ -1,6 +1,6 @@
 {
   "_comment" : "Portas reservadas: 11xxx(workers), 22xxx(coordinators)",
-  "debug" : true,
+  "debugMode" : true,
   "defaultPort" : 12345,
   "NumCoordinators" : 44,
   "NumWorkers" : 3
