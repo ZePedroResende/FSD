@@ -74,7 +74,7 @@ public class Worker {
 
             if(msg.equals(Tuple.Type.COMMIT)){
 
-                if( Math.round( Math.random() ) ==1) executorService.shutdownNow();
+                //if( Math.round( Math.random() ) ==1) executorService.shutdownNow();
                 if( transactionsActions.containsKey( tuple.getId()) ){
 
                     List<Tuple> listTuple = transactionsActions.remove( tuple.getId() );
