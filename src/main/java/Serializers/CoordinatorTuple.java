@@ -12,6 +12,7 @@ public class CoordinatorTuple implements Transaction {
     final   byte[]  value;
     final Type msg;
     final Request request;
+
     final   int    transId;
     final   String address;
     final int idClient;
@@ -97,5 +98,12 @@ public class CoordinatorTuple implements Transaction {
         return Address.from(this.address);
     }
 
+    public int getIdClient() {
+        return idClient;
+    }
+
+    public String getAddressClient() {
+        return addressClient;
+    }
 
 }

@@ -24,7 +24,8 @@ public class Coordinator {
     private final ExecutorService es1;
     private final Serializer s;
     private int numberOfTrans;
-    private Map<Integer,Boolean> oldTransactions;
+    private Map<Integer,Map.Entry<Integer,String>> oldTransactions;
+    private Map<Integer,Map.Entry<Integer,String>> oldRollbacks;
     private Journal journal;
     private static final boolean DEBUG = true;
 
@@ -42,6 +43,7 @@ public class Coordinator {
                 .addType(CoordinatorTuple.class)
                 .build();
         this.oldTransactions = new ConcurrentHashMap<>();
+        this.oldRollbacks= new ConcurrentHashMap<>();
         this.journal = new Journal( "coordinator"+ myId, s);
 
 
@@ -51,8 +53,14 @@ public class Coordinator {
         channel.registerHandler( "put", (o, m) -> {
             System.out.println("PUT");
             RequestPut requestPut = reqPutSer.decode(m);
-            Boolean b = put(requestPut.getValues());
-            return respPutSer.encode(new ResponsePut(b));
+            int idClient = requestPut.getId();
+            Boolean b = put(requestPut.getValues(),idClient,o.toString());
+
+
+            this.channel.sendAsync(o,
+                    "put", respPutSer.encode(new ResponsePut(b,idClient)));
+           // return respPutSer.encode(new ResponsePut(b,idClient));
+
         },es);
 
         Serializer reqGetSer= new SerializerBuilder().addType(Collection.class).addType(RequestGet.class).build();
@@ -61,18 +69,41 @@ public class Coordinator {
         channel.registerHandler( "get", (o, m) -> {
             System.out.println("GET");
             RequestGet requestGet = reqGetSer.decode(m);
-            Map<Long,byte[]> map = get(requestGet.getValues());
-            return respGetSer.encode(new ResponseGet(map));
+            int idClient = requestGet.getId();
+            Map<Long,byte[]> map = get(requestGet.getValues(),idClient,o.toString());
+
+            this.channel.sendAsync(o,
+                    "get", respGetSer.encode(new ResponseGet(map,idClient)));
+            //return respGetSer.encode(new ResponseGet(map,idClient));
         },es);
 
         channel.registerHandler("RETRY",  (o, m) -> {
             Tuple t = this.s.decode(m);
             System.out.println("RETRY id =" + t.getId() );
             if(t.getId() < this.numberOfTrans){
-                if(this.oldTransactions.containsKey(t.getId()))
-                    commitRequest(t.getId(),o, t.getRequest());
-                else
-                    rollbackRequest(o,t.getId());
+                if(this.oldTransactions.containsKey(t.getId())){
+                    Map.Entry<Integer,String> entry = this.oldTransactions.get(t.getId());
+                    commitRequest(t.getId(),o, t.getRequest(),entry.getKey(),entry.getValue());
+                    if(t.getRequest().equals(Tuple.Request.GET)){
+                        this.channel.sendAsync(Address.from(entry.getValue()),
+                                "get", respGetSer.encode(new ResponseGet(null,entry.getKey())));
+                    } else{
+                        this.channel.sendAsync(Address.from(entry.getValue()),
+                                "put", respGetSer.encode(new ResponsePut(true,entry.getKey())));
+                    }
+                }
+                else{
+                    Map.Entry<Integer,String> entry = this.oldRollbacks.get(t.getId());
+                    rollbackRequest(o,t.getId(),entry.getKey(),entry.getValue());
+                    if(t.getRequest().equals(Tuple.Request.GET)){
+                        this.channel.sendAsync(Address.from(entry.getValue()),
+                                "get", respGetSer.encode(new ResponseGet(null,entry.getKey())));
+                    } else{
+                        this.channel.sendAsync(Address.from(entry.getValue()),
+                                "put", respGetSer.encode(new ResponsePut(false,entry.getKey())));
+                    }
+                }
+
             }
         },es);
 
@@ -83,24 +114,24 @@ public class Coordinator {
         }
     }
 
-    private Boolean put(Map<Long,byte[]> values) {
+    private Boolean put(Map<Long,byte[]> values, int idClient, String clientAddress) {
         Set<Long> l = values.keySet();
         Long[] array =  l.toArray(new Long[l.size()]);
 
-        return getLocks(array, (transaction, key) -> putRequest(transaction, key, values.get(key)), Tuple.Request.PUT)
+        return getLocks(array, (transaction, key) -> putRequest(transaction, key, values.get(key)), Tuple.Request.PUT, idClient,clientAddress)
                 != null;
     }
 
-    private Map<Long, byte[]> get(Collection<Long> gets) {
+    private Map<Long, byte[]> get(Collection<Long> gets, int idClient, String clientAddress) {
         Long[] array =  gets.toArray(new Long[gets.size()]);
 
         Map<Long,byte[]> hashMap = new HashMap<>();
 
-        return getLocks(array,(transaction, key) ->getRequest(transaction,key,hashMap),Tuple.Request.GET)
+        return getLocks(array,(transaction, key) ->getRequest(transaction,key,hashMap),Tuple.Request.GET, idClient, clientAddress)
                 != null ? hashMap : null;
     }
 
-    private List<Address> getLocks(Long[] array, BiPredicate<Integer,Long> getLock, Tuple.Request request ){
+    private List<Address> getLocks(Long[] array, BiPredicate<Integer,Long> getLock, Tuple.Request request, int idClient, String clientAddress) {
         int transaction = getNextTransactionId();
         Arrays.sort(array);
         List<Address> workersConfirm = new ArrayList<>();
@@ -108,21 +139,21 @@ public class Coordinator {
         try {
 
             Arrays.stream(array).forEach(key ->
-                    this.journal.addSegment(new CoordinatorTuple(key,null, Tuple.Type.PREPARED,request,transaction,workers[getWorkerIndex(key)])));
+                    this.journal.addSegment(new CoordinatorTuple(key,null, Tuple.Type.PREPARED,request,transaction,workers[getWorkerIndex(key)],idClient,clientAddress)));
             for (Long key : array){
                 if(getLock.test(transaction,key)){
                     workersConfirm.add(workers[getWorkerIndex(key)]);
-                    this.journal.addSegment(new CoordinatorTuple(key,null, Tuple.Type.OK,request,transaction, workers[getWorkerIndex(key)]));
+                    this.journal.addSegment(new CoordinatorTuple(key,null, Tuple.Type.OK,request,transaction, workers[getWorkerIndex(key)], idClient,clientAddress));
                 }
                 else{
                     CompletableFuture.allOf(workersConfirm.stream()
-                            .map(r -> rollbackRequest(r, transaction))
+                            .map(r -> rollbackRequest(r, transaction,idClient,clientAddress))
                             .toArray(CompletableFuture[]::new)).get();
                     return null;
                 }
             }
             CompletableFuture.allOf(workersConfirm.stream()
-                    .map(address -> commitRequest(transaction, address,request).thenRun(() -> { }))
+                    .map(address -> commitRequest(transaction, address,request,idClient,clientAddress).thenRun(() -> { }))
                     .toArray(CompletableFuture[]::new)).get();
 
             return workersConfirm;
@@ -164,19 +195,23 @@ public class Coordinator {
         }
     }
 
-    private CompletableFuture<Void> commitRequest (int transactionId, Address worker, Tuple.Request request) {
+    private CompletableFuture<Void> commitRequest (int transactionId, Address worker, Tuple.Request request, int idClient, String clientAddress) {
 
         return channel.sendAsync(worker,"CONFIRM",s.encode(
                 new Tuple(0,null, Tuple.Type.COMMIT,request,transactionId))).whenComplete((o,e) ->{
                     System.out.println("Commit transaction " + transactionId);
-                    this.journal.addSegment(new CoordinatorTuple(0,null, Tuple.Type.COMMIT,request,transactionId,worker));
-                    this.oldTransactions.put(transactionId,true);
+                    this.journal.addSegment(new CoordinatorTuple(0,null, Tuple.Type.COMMIT,request,transactionId,worker,idClient, clientAddress));
+                    this.oldTransactions.put(transactionId,new AbstractMap.SimpleEntry<>(idClient,clientAddress));
         } );
     }
 
-    private CompletableFuture<Void> rollbackRequest(Address address, int transactionId){
+    private CompletableFuture<Void> rollbackRequest(Address address, int transactionId, int idClient, String clientAddress) {
         return channel.sendAsync(address,"CONFIRM",s.encode(
-                new Tuple(0,null, Tuple.Type.ROLLBACK, Tuple.Request.CANCEL, transactionId)));
+                new Tuple(0,null, Tuple.Type.ROLLBACK, Tuple.Request.CANCEL, transactionId))).whenComplete((o,e) ->{
+            System.out.println("Rollback transaction " + transactionId);
+            this.journal.addSegment(new CoordinatorTuple(0,null, Tuple.Type.ROLLBACK,Tuple.Request.CANCEL,transactionId,address,idClient, clientAddress));
+            this.oldRollbacks.put(transactionId,new AbstractMap.SimpleEntry<>(idClient,clientAddress));
+        });
     }
 
     private CompletableFuture<Void> makeRecover(){
@@ -192,13 +227,23 @@ public class Coordinator {
 
                 for( Transaction t : list) {
                     CoordinatorTuple tuple = (CoordinatorTuple) t;
-                    //if (tuple.getRequest().equals(Tuple.Request.PUT))
-                        oldTransactions.put(tuple.getId(), true);
+                    oldTransactions.put(tuple.getId(), new AbstractMap.SimpleEntry<>(tuple.getIdClient(),tuple.getAddressClient()));
                 }
             } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();
             }
 
+            list = null;
+            try {
+                list = journal.getUnconfirmed().get();
+
+                for( Transaction t : list) {
+                    CoordinatorTuple tuple = (CoordinatorTuple) t;
+                    oldRollbacks.put(tuple.getId(), new AbstractMap.SimpleEntry<>(tuple.getIdClient(),tuple.getAddressClient()));
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
 
             try {
                 numberOfTrans = journal.getTransactionId().get();
@@ -211,13 +256,13 @@ public class Coordinator {
                 if(list.size() != 0){
                     if(list.get(0).isOk()){
                         for (Transaction t : list) {
-                            Tuple tuple = (Tuple) t;
-                            commitRequest(t.getId(),workers[getWorkerIndex( tuple.getKey())],((Tuple) t).getRequest());
+                            CoordinatorTuple tuple = (CoordinatorTuple) t;
+                            commitRequest(t.getId(),workers[getWorkerIndex( tuple.getKey())],tuple.getRequest(),tuple.getIdClient(),tuple.getAddressClient());
                         }
                     }else{
                         for (Transaction t : list) {
-                            Tuple tuple = (Tuple) t;
-                            rollbackRequest(workers[getWorkerIndex( tuple.getKey())],t.getId());
+                            CoordinatorTuple tuple = (CoordinatorTuple) t;
+                            rollbackRequest(workers[getWorkerIndex( tuple.getKey())],t.getId(),tuple.getIdClient(),tuple.getAddressClient());
                         }
                     }
                 }
