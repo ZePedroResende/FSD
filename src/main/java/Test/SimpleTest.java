@@ -38,19 +38,22 @@ public class SimpleTest{
         results = new HashMap<>();
         numCoords = 1;
         Address[] workerAddress = {Address.from("localhost:12347")};
-        Address[] coordAddress = {Address.from("localhost:1234")};
+        Address[] coordAddress = {Address.from("localhost:11000")};
 
-        test = new Worker(0,workerAddress[0]);
         coordinators = new Coordinator[numCoords];
 
         for(int i = 0; i < numCoords; i ++ ){
             coordinators[i] = new Coordinator(coordAddress, workerAddress, i);
         }
+        Thread.sleep(10000);
 
+        test = new Worker(0,workerAddress[0]);
+
+        Thread.sleep(10000);
         api = new Middleware(coordAddress[0],"localhost:12346");
         /////////////////  TESTS  /////////////////
 
-        Thread.sleep(1000);
+        Thread.sleep(10000);
 
         System.out.println( "##### Test0 #####");
         int result = test0();
