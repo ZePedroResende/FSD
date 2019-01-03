@@ -14,9 +14,11 @@ public class CoordinatorTuple implements Transaction {
     final Request request;
     final   int    transId;
     final   String address;
+    final int idClient;
+    final String addressClient;
 
 
-    public CoordinatorTuple(long key, byte[] value, Type msg, Request request, int transId, Address address) {
+    public CoordinatorTuple(long key, byte[] value, Type msg, Request request, int transId, Address address, int idClient, String addressClient) {
 
         this.key = key;
         this.value = value;
@@ -24,6 +26,8 @@ public class CoordinatorTuple implements Transaction {
         this.request = request;
         this.transId = transId;
         this.address = address.toString();
+        this.idClient = idClient;
+        this.addressClient = addressClient;
     }
 
     @Override

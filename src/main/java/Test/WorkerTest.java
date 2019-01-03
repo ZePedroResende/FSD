@@ -43,22 +43,22 @@ public class WorkerTest {
 
     void sendRoolback(int id, Address addr){
         Tuple t = new Tuple(1,null, Tuple.Type.ROLLBACK, Tuple.Request.CANCEL,id);
-        channel.sendAsync(addr, "Tuple", s.encode( t ));
+        channel.sendAsync(addr, "CONFIRM", s.encode( t ));
     }
 
     void sendCommit(int id, Address addr){
         Tuple t = new Tuple(1,null, Tuple.Type.COMMIT, Tuple.Request.GET, id);
-        channel.sendAsync(addr, "Tuple", s.encode( t ));
+        channel.sendAsync(addr, "CONFIRM", s.encode( t ));
     }
 
     void sendPreparedGET(int id, Long k, Address addr){
         Tuple t = new Tuple(k,null, Tuple.Type.PREPARED, Tuple.Request.GET, id);
-        channel.sendAsync(addr, "Tuple", s.encode( t ));
+        channel.sendAsync(addr, "PREPARE", s.encode( t ));
     }
 
     void sendPreparedPUT(int id, Long k, byte[] v, Address addr){
         Tuple t = new Tuple( k, v, Tuple.Type.PREPARED, Tuple.Request.PUT, id);
-        channel.sendAsync(addr, "Tuple", s.encode( t ));
+        channel.sendAsync(addr, "PREPARE", s.encode( t ));
     }
 
     private static final int SLEEPTIME = 200;
