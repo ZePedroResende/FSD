@@ -105,6 +105,7 @@ public class Journal {
             writer = null;
             reader = j.openReader(0);
         }
+        reader = j.openReader(0);
 
         Map< Integer, List<Transaction> > data = new HashMap<>();
 

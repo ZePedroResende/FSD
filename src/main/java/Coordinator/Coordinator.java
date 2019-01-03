@@ -67,6 +67,7 @@ public class Coordinator {
 
         channel.registerHandler("RETRY",  (o, m) -> {
             Tuple t = this.s.decode(m);
+            System.out.println("RETRY id =" + t.getId() );
             if(t.getId() < this.numberOfTrans){
                 if(this.oldTransactions.containsKey(t.getId()))
                     commitRequest(t.getId(),o, t.getRequest());
@@ -126,9 +127,9 @@ public class Coordinator {
 
             return workersConfirm;
         } catch (InterruptedException | ExecutionException e) {
-            e.printStackTrace();
+            //e.printStackTrace();
+            return null;
         }
-        return null;
     }
 
     private Boolean getRequest (int transactionId, Long key, Map<Long,byte[]> map)  {
@@ -158,7 +159,7 @@ public class Coordinator {
                     )
                     .thenApply(consumer::test).get();
         } catch (InterruptedException | ExecutionException e) {
-            e.printStackTrace();
+            //e.printStackTrace();
             return  false;
         }
     }
@@ -191,7 +192,7 @@ public class Coordinator {
 
                 for( Transaction t : list) {
                     CoordinatorTuple tuple = (CoordinatorTuple) t;
-                    if (tuple.getRequest().equals(Tuple.Request.PUT))
+                    //if (tuple.getRequest().equals(Tuple.Request.PUT))
                         oldTransactions.put(tuple.getId(), true);
                 }
             } catch (InterruptedException | ExecutionException e) {
