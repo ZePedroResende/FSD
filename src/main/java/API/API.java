@@ -16,7 +16,7 @@ public class API {
     public static Middleware middleware;
 
     public static void main(String[] args) throws Exception {
-        Middleware middleware = new Middleware(args[0], Config.loadConfig() );
+        Middleware middleware = new Middleware(args[0], Config.loadConfig());
     }
 
     public CompletableFuture<Boolean> put(Map<Long,byte[]> values){

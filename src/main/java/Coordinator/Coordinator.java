@@ -215,7 +215,7 @@ public class Coordinator {
     }
 
     private CompletableFuture<Void> makeRecover(){
-
+        if(DEBUG) System.out.println("[C"+this.myId+"] Start recover");
         CompletableFuture cp = new CompletableFuture();
         try{
             return  cp;
@@ -272,6 +272,7 @@ public class Coordinator {
             }
 
             cp.complete(null);
+            if(DEBUG) System.out.println("[C"+this.myId+"] Finish recover");
         }
     }
 

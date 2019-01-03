@@ -124,7 +124,7 @@ public class Middleware {
 
         this.getsWaiting.put( transId, cf);
 
-        channel.sendAsync( addresses[rnd], "put", requestPutS.encode( new RequestGet( keys, transId) ));
+        channel.sendAsync( addresses[rnd], "get", requestGetS.encode( new RequestGet( keys, transId) ));
 
         return cf;
     }

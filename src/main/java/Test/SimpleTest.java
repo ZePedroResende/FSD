@@ -4,6 +4,7 @@ import Coordinator.Coordinator;
 import Serializers.*;
 import Serializers.Tuple;
 import Worker.Worker;
+import API.Middleware;
 import io.atomix.cluster.messaging.ManagedMessagingService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
 import io.atomix.utils.net.Address;
@@ -40,6 +41,10 @@ public class SimpleTest{
         Address[] workerAddress = {Address.from("localhost:12347")};
         Address[] coordAddress = {Address.from("localhost:11000")};
 
+        test = new Worker(0,workerAddress[0]);
+
+        Thread.sleep(10000);
+
         coordinators = new Coordinator[numCoords];
 
         for(int i = 0; i < numCoords; i ++ ){
@@ -47,10 +52,11 @@ public class SimpleTest{
         }
         Thread.sleep(10000);
 
-        test = new Worker(0,workerAddress[0]);
-
-        Thread.sleep(10000);
-        api = new Middleware(coordAddress[0],"localhost:12346");
+        try {
+            api = new Middleware(coordAddress,"12346");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         /////////////////  TESTS  /////////////////
 
         Thread.sleep(10000);
