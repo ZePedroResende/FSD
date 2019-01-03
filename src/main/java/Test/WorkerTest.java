@@ -3,6 +3,7 @@ package Test;
 import Serializers.Tuple;
 import Worker.Worker;
 
+import java.time.Duration;
 import java.util.*;
 
 import io.atomix.cluster.messaging.ManagedMessagingService;
@@ -14,15 +15,15 @@ import io.atomix.utils.serializer.SerializerBuilder;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
 public class WorkerTest {
 
     private final ManagedMessagingService channel;
-    private final ExecutorService executorService;
     private final Serializer s;
 
-    WorkerTest(Address myAddr, BiConsumer<Address,Tuple> handler) throws ExecutionException, InterruptedException {
+    private WorkerTest(Address myAddr, BiConsumer<Address, Tuple> handler) throws ExecutionException, InterruptedException {
 
         s = new SerializerBuilder()
                 .addType(Serializers.Tuple.Type.class)
@@ -30,42 +31,43 @@ public class WorkerTest {
                 .addType(Tuple.class)
                 .build();
 
-        this.executorService = Executors.newSingleThreadExecutor();
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
 
         this.channel = NettyMessagingService.builder()
                 .withAddress( myAddr )
                 .build();
 
-        this.channel.registerHandler("Tuple", (o,m) -> { handler.accept(o, s.decode(m)); } , executorService);
+        //this.channel.registerHandler("RETRY", (o,m) -> { handler.accept(o, s.decode(m)); }, executorService);
 
         this.channel.start().get();
     }
 
-    void sendRoolback(int id, Address addr){
+    private void sendRoolback(int id, Address addr){
         Tuple t = new Tuple(1,null, Tuple.Type.ROLLBACK, Tuple.Request.CANCEL,id);
         channel.sendAsync(addr, "CONFIRM", s.encode( t ));
     }
 
-    void sendCommit(int id, Address addr){
+    private void sendCommit(int id, Address addr){
         Tuple t = new Tuple(1,null, Tuple.Type.COMMIT, Tuple.Request.GET, id);
         channel.sendAsync(addr, "CONFIRM", s.encode( t ));
     }
 
-    void sendPreparedGET(int id, Long k, Address addr){
+    private Tuple sendPreparedGET(int id, Long k, Address addr) throws ExecutionException, InterruptedException {
         Tuple t = new Tuple(k,null, Tuple.Type.PREPARED, Tuple.Request.GET, id);
-        channel.sendAsync(addr, "PREPARE", s.encode( t ));
+        byte[] b = channel.sendAndReceive(addr, "PREPARE", s.encode(t), TIMEOUT).get();
+        return s.decode(b);
     }
 
-    void sendPreparedPUT(int id, Long k, byte[] v, Address addr){
+    private Tuple sendPreparedPUT(int id, Long k, byte[] v, Address addr) throws ExecutionException, InterruptedException {
         Tuple t = new Tuple( k, v, Tuple.Type.PREPARED, Tuple.Request.PUT, id);
-        channel.sendAsync(addr, "PREPARE", s.encode( t ));
+        byte[] b = channel.sendAndReceive(addr, "PREPARE", s.encode(t)).get();
+        return s.decode( b);
     }
 
-    private static final int SLEEPTIME = 200;
-    private static final int numWorker = 5;
+    private static final Duration TIMEOUT= Duration.ofMillis(6000) ;  //   > 700
+    private static final int numWorker = 3;
 
     private static Address[] addrWorkers;
-    private static Worker[] workers;
     private static WorkerTest test;
     private static Map< Integer, List<Tuple> > results;
 
@@ -74,16 +76,14 @@ public class WorkerTest {
         ///////////////// Initiation  /////////////////
         results = new HashMap<>();
 
-        test = new WorkerTest(Address.from("localhost:12345"),
-                (o, t) ->{
-
-                    addToResults(t, o);
-                    System.out.println("[MAIN] <==  [W" + getId(o) + "]: " + t.toString());
-                });
+        test = new WorkerTest(Address.from("localhost:12345"), (o, t) ->{
+            addToResults(t, o);
+            System.out.println("[MAIN] <==  [W" + getId(o) + "]: " + t.toString());
+        });
 
 
         addrWorkers = new Address[numWorker];
-        workers = new Worker[numWorker];
+        Worker[] workers = new Worker[numWorker];
 
         for(int i = 0; i < numWorker; i ++ ){
             Address addr = Address.from( String.format("localhost:11%03d", i));
@@ -126,106 +126,86 @@ public class WorkerTest {
         System.out.println("\n\nAll tests done successfully :D ");
     }
 
-    private static int test0() throws InterruptedException {
+    private static int test0() {
 
         results.clear();
 
-        test.sendPreparedPUT(0,8L, "ola".getBytes(), addrWorkers[0]);
+        Tuple t = null;
 
-        Thread.sleep( SLEEPTIME );
+        try {
+            t = test.sendPreparedPUT(0,8L, "ola".getBytes(), addrWorkers[0]);
+        } catch (Exception e) {
+            return 1;
+        }
 
-        if( results.keySet().size() != 1)
+        if( ! t.getMsg().equals(Tuple.Type.OK))
             return 2;
 
         test.sendCommit(0, addrWorkers[0]);
 
-        Thread.sleep( SLEEPTIME );
-
-        results.clear();
-
         return 0;
     }
 
-    private static int test1() throws InterruptedException {
+    private static int test1() {
         // Test a simple put, commit and get
 
-        results.clear();
-
         if( numWorker < 3) return 1;
+        Tuple t1,t2,t3;
 
-        test.sendPreparedPUT(1,1L, "ola".getBytes(), addrWorkers[0]);
-        test.sendPreparedPUT(1,2L, "mundo".getBytes(), addrWorkers[1]);
-        test.sendPreparedPUT(1,3L, "lindo".getBytes(), addrWorkers[2]);
-
-        Thread.sleep( SLEEPTIME );
-
-        if( results.keySet().size() != 3)
-            return 2;
-
-        Tuple t1 = results.get(0).get(0);
-        Tuple t2 = results.get(1).get(0);
-        Tuple t3 = results.get(2).get(0);
-
-        results.clear();
+        try {
+            t1 = test.sendPreparedPUT(1,1L, "ola".getBytes(), addrWorkers[0]);
+            t2 = test.sendPreparedPUT(1,2L, "mundo".getBytes(), addrWorkers[1]);
+            t3 = test.sendPreparedPUT(1,3L, "lindo".getBytes(), addrWorkers[2]);
+        } catch (Exception e) {
+            return 1;
+        }
 
         if( ! t1.getMsg().equals(Tuple.Type.OK) || ! t2.getMsg().equals(Tuple.Type.OK) || ! t3.getMsg().equals(Tuple.Type.OK) )
-            return 3;
+            return 2;
 
         test.sendCommit(1, addrWorkers[0]);
         test.sendCommit(1, addrWorkers[1]);
         test.sendCommit(1, addrWorkers[2]);
 
-        test.sendPreparedGET(2,1L, addrWorkers[0]);
-        test.sendPreparedGET(2,2L, addrWorkers[1]);
-        test.sendPreparedGET(2,3L, addrWorkers[2]);
-
-        Thread.sleep( SLEEPTIME );
-
-        if( results.keySet().size() != 3)
-            return 4;
-
-        t1 = results.get(0).get(0);
-        t2 = results.get(1).get(0);
-        t3 = results.get(2).get(0);
-
-        results.clear();
+        try {
+            t1 = test.sendPreparedGET(2,1L, addrWorkers[0]);
+            t2 = test.sendPreparedGET(2,2L, addrWorkers[1]);
+            t3 = test.sendPreparedGET(2,3L, addrWorkers[2]);
+        } catch (Exception e) {
+            return 3;
+        }
 
         if( ! t1.getMsg().equals(Tuple.Type.OK) || ! t2.getMsg().equals(Tuple.Type.OK) || ! t3.getMsg().equals(Tuple.Type.OK) )
-            return 5;
+            return 4;
 
         if( ! Arrays.equals(t1.getValue(), "ola".getBytes()) || !Arrays.equals(t2.getValue(), "mundo".getBytes()) || !Arrays.equals(t3.getValue(), "lindo".getBytes()))
-            return 6;
+            return 5;
 
         test.sendCommit(2, addrWorkers[0]);
         test.sendCommit(2, addrWorkers[1]);
         test.sendCommit(2, addrWorkers[2]);
 
-        Thread.sleep( SLEEPTIME );
-
         return 0;
     }
 
-    private static int test2() throws InterruptedException {
+    private static int test2() {
         // test a  get of nonexistent value
-
-        results.clear();
 
         if( numWorker < 1 )
             return 1;
 
-        test.sendPreparedGET(3, 20L, addrWorkers[0] );
+        Tuple t1;
 
-        Thread.sleep(SLEEPTIME );
-
-        if( results.keySet().size() != 1)
+        try {
+            t1 = test.sendPreparedGET(3, 20L, addrWorkers[0] );
+        } catch ( Exception e) {
             return 2;
-
-        Tuple t1 = results.get(0).get(0);
+        }
 
         return t1.getMsg().equals( Tuple.Type.ROLLBACK) ? 0 : 3;
     }
 
-    private static int test3() throws InterruptedException {
+    private static int test3() {
         // test a lock of value
         // make a put without a commit or rollback and send a second put with same key
 
@@ -234,60 +214,66 @@ public class WorkerTest {
         if( numWorker < 1)
             return 1;
 
-        test.sendPreparedPUT(4,1L, "ola mundo".getBytes(), addrWorkers[0]);
-
-        Thread.sleep( SLEEPTIME );
-
-        if( results.keySet().size() != 1)
+        try {
+            test.sendPreparedPUT(4,1L, "ola mundo".getBytes(), addrWorkers[0]);
+        } catch (Exception e) {
             return 2;
+        }
 
-        test.sendPreparedPUT(5,1L, "ola lindo mundo".getBytes(), addrWorkers[0]);
+        AtomicReference<Boolean> flag = new AtomicReference<>();
 
-        Thread.sleep( SLEEPTIME );
+        flag.set( false );
 
-        if( results.get(0).size() != 1)
+        Thread th = new Thread(() -> {
+            try {
+                test.sendPreparedPUT(4,1L, "ola mundo lindo".getBytes(), addrWorkers[0]);
+                flag.set(true);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+
+        th.start();
+
+        try {
+            Thread.sleep( 500 );
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        if( flag.getAndSet(true) ) {
             return 3;
-
+        }
         test.sendCommit(4, addrWorkers[0]);
 
-        Thread.sleep( SLEEPTIME );
-
-        if( results.get(0).size() != 2)
-            return 4;
-
         test.sendCommit(5, addrWorkers[0]);
-
-        Thread.sleep( SLEEPTIME );
 
         return 0;
     }
 
-    private static int test4() throws InterruptedException{
+    private static int test4() {
         // test a roolback after a put and confirm with a get
 
         results.clear();
 
-        test.sendPreparedPUT(6, 5L, "ola".getBytes(), addrWorkers[0]);
-
-        Thread.sleep( SLEEPTIME );
-
-        if( results.keySet().size() != 1)
+        try {
+            test.sendPreparedPUT(6, 5L, "ola".getBytes(), addrWorkers[0]);
+        } catch ( Exception e) {
             return 1;
+        }
 
         test.sendRoolback( 6, addrWorkers[0]);
 
-        test.sendPreparedGET( 7, 5L , addrWorkers[0]);
+        Tuple t1 ;
 
-        Thread.sleep( SLEEPTIME );
-
-        if( results.get(0).size() != 2)
+        try {
+            t1 = test.sendPreparedGET( 7, 5L , addrWorkers[0]);
+        } catch (Exception e) {
             return 2;
-
-        Tuple t1 = results.get(0).get(1);
+        }
 
         return t1.getMsg().equals(Tuple.Type.ROLLBACK)  ?  0 : 3;
     }
-
 
     private static int getId(Address addr){
 

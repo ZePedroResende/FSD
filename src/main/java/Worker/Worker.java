@@ -1,5 +1,6 @@
 package Worker;
 
+import Config.Config;
 import Journal.Journal;
 import Serializers.Transaction;
 import Serializers.Tuple;
@@ -19,8 +20,8 @@ import java.util.function.BiFunction;
 
 public class Worker {
 
-    private static final int NUMCOORD = 1;
-    private static final boolean DEBUG = true;
+    private static int NUMCOORD;
+    private static boolean DEBUG;
 
     private final ManagedMessagingService channel;
 
@@ -28,9 +29,21 @@ public class Worker {
     private Map<Long, MyLock> locks;
     private Map<Integer, List<Tuple>> transactionsActions;
 
-    public Worker(int myId,  Address myAddr) throws ExecutionException, InterruptedException {
+    public Worker(int myId, Address myAddr) throws ExecutionException, InterruptedException {
+        this(myId, myAddr, null);
+    }
+
+    public Worker(int myId, Address myAddr, Config config) throws ExecutionException, InterruptedException {
 
         ///////////////// Initiation  /////////////////
+        if (config != null){
+            NUMCOORD = config.getNumCoordinators();
+            DEBUG = config.getDebugMode();
+        } else {
+            NUMCOORD = 1;
+            DEBUG = true;
+        }
+
 
         this.myHashMap = new ConcurrentHashMap<>();
         this.locks = new ConcurrentHashMap<>();
@@ -101,7 +114,7 @@ public class Worker {
 
             CompletableFuture<Boolean> cf;
 
-            cf = new CompletableFuture<Boolean>();
+            cf = new CompletableFuture<>();
 
             if( ! transactionsActions.containsKey( tuple.getId()) )
                 this.transactionsActions.put( tuple.getId(), new ArrayList<>() );
