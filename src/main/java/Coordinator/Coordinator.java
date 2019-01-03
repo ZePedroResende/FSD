@@ -57,7 +57,10 @@ public class Coordinator {
             Boolean b = put(requestPut.getValues(),idClient,o.toString());
 
 
+            this.channel.sendAsync(o,
+                    "put", respPutSer.encode(new ResponsePut(b,idClient)));
            // return respPutSer.encode(new ResponsePut(b,idClient));
+
         },es);
 
         Serializer reqGetSer= new SerializerBuilder().addType(Collection.class).addType(RequestGet.class).build();
@@ -68,6 +71,9 @@ public class Coordinator {
             RequestGet requestGet = reqGetSer.decode(m);
             int idClient = requestGet.getId();
             Map<Long,byte[]> map = get(requestGet.getValues(),idClient,o.toString());
+
+            this.channel.sendAsync(o,
+                    "get", respGetSer.encode(new ResponseGet(map,idClient)));
             //return respGetSer.encode(new ResponseGet(map,idClient));
         },es);
 
