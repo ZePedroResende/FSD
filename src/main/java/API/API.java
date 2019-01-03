@@ -13,7 +13,11 @@ public class API {
     public static Middleware middleware;
 
     public static void main(String[] args){
-        Middleware middleware = new Middleware(args[0]);
+        try {
+            Middleware middleware = new Middleware(args[0]);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public CompletableFuture<Boolean> put(Map<Long,byte[]> values){

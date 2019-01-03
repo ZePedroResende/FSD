@@ -143,9 +143,14 @@ public class Worker {
             try {
                 return makeRecovery(journal,myId,serializerTuple);
             } catch (ExecutionException | InterruptedException e) {
-                e.printStackTrace();
+                System.out.println("[W"+myId+"] Coordiantor not up");
+                CompletableFuture<Void> cp = new CompletableFuture<>();
+                try{
+                    return cp;
+                }finally {
+                    cp.complete(null);
+                }
             }
-            return new CompletableFuture<Void>();
         }).get();
     }
 

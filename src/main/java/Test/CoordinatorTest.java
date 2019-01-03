@@ -188,7 +188,7 @@ class Middleware {
     }
 
     public CompletableFuture<Boolean> put(Map<Long,byte[]> values){
-        return channel.sendAndReceive(address, "put", requestPutS.encode(new RequestPut(values)), Duration.ofMinutes(5) ,es)
+        return channel.sendAndReceive(address, "put", requestPutS.encode(new RequestPut(values,0)), Duration.ofMinutes(5) ,es)
                 .thenApply((i) -> {
                     ResponsePut response = responsePutS.decode(i);
                     return response.getResponse() ;
@@ -197,7 +197,7 @@ class Middleware {
 
     public CompletableFuture<Map<Long,byte[]>> get(Collection<Long> keys){
 
-        return channel.sendAndReceive(address, "get", requestGetS.encode(new RequestGet(keys)), es)
+        return channel.sendAndReceive(address, "get", requestGetS.encode(new RequestGet(keys,0)), es)
                 .thenApply((i) -> {
                     ResponseGet response = responseGetS.decode(i);
                     return response.getResponse();

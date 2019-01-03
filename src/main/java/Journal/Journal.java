@@ -164,10 +164,16 @@ public class Journal {
             Set<Address> addresses = unconfirmed.stream()
                     .map(l -> ((CoordinatorTuple) l).getAddress())
                     .collect(Collectors.toSet());
-            unconfirmed = addresses.stream()
-                    .map( address -> new Tuple(0,null, Tuple.Type.OK,((CoordinatorTuple) finalLast).getRequest(),id))
-                    .collect(Collectors.toList());
+            if(addresses.size() > 0){
 
+                int idClient = ((CoordinatorTuple) unconfirmed.get(0)).getIdClient();
+                String addressClient = ((CoordinatorTuple) unconfirmed.get(0)).getAddressClient();
+
+                unconfirmed = addresses.stream()
+                        .map( address -> new CoordinatorTuple(0,null, Tuple.Type.OK,((CoordinatorTuple) finalLast).getRequest(),id,address,idClient, addressClient))
+                        .collect(Collectors.toList());
+
+            }
         } else {
 
             int id = last.getId();
@@ -183,9 +189,16 @@ public class Journal {
             Set<Address> addresses = unconfirmed.stream()
                     .map(l -> ((CoordinatorTuple) l).getAddress())
                     .collect(Collectors.toSet());
-            unconfirmed = addresses.stream()
-                    .map( address -> new Tuple(0,null, Tuple.Type.ROLLBACK,Tuple.Request.CANCEL,id))
-                    .collect(Collectors.toList());
+
+            if(addresses.size() > 0){
+                int idClient = ((CoordinatorTuple) unconfirmed.get(0)).getIdClient();
+                String addressClient = ((CoordinatorTuple) unconfirmed.get(0)).getAddressClient();
+
+                unconfirmed = addresses.stream()
+                        .map( address -> new CoordinatorTuple(0,null, Tuple.Type.ROLLBACK,Tuple.Request.CANCEL,id , address, idClient, addressClient))
+                        .collect(Collectors.toList());
+            }
+
         }
 
         return unconfirmed;

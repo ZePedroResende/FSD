@@ -23,7 +23,11 @@ public class APITest extends Thread {
     private  Middleware md;
 
     APITest( String port){
-        this.md = new Middleware(port);
+        try {
+            this.md = new Middleware(port);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
