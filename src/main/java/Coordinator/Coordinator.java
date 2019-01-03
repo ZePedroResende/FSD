@@ -21,10 +21,12 @@ public class Coordinator {
     private final ManagedMessagingService channel;
     private final int myId;
     private final ExecutorService es;
+    private final ExecutorService es1;
     private final Serializer s;
     private int numberOfTrans;
     private Map<Integer,Boolean> oldTransactions;
     private Journal journal;
+    private static final boolean DEBUG = true;
 
     public Coordinator(Address[] coordinators , Address[] workers, int myId) {
         this.coordinators = coordinators;
@@ -32,48 +34,15 @@ public class Coordinator {
         this.myId = myId;
         this.channel = NettyMessagingService.builder().withAddress(coordinators[myId]).build();
         this.es = Executors.newSingleThreadExecutor();
+        this.es1 = Executors.newSingleThreadExecutor();
         this.s = Serializer.builder()
                 .addType(Tuple.Request.class)
                 .addType(Tuple.Type.class)
                 .addType(Tuple.class)
+                .addType(CoordinatorTuple.class)
                 .build();
         this.oldTransactions = new ConcurrentHashMap<>();
         this.journal = new Journal( "coordinator"+ myId, s);
-
-        List< Transaction > list = null;
-        try {
-            list = journal.getCommitted().get();
-
-            for( Transaction t : list) {
-                Tuple tuple = (Tuple) t;
-                if (tuple.getRequest().equals(Tuple.Request.PUT))
-                    oldTransactions.put(tuple.getId(), true);
-            }
-        } catch (InterruptedException | ExecutionException e) {
-            e.printStackTrace();
-        }
-
-
-        try {
-            list = journal.getLastUnconfirmed().get();
-            if(list.size() != 0){
-                numberOfTrans =  list.get(list.size() -1).getId() + 1;
-                if(list.get(0).isOk()){
-                    for (Transaction t : list) {
-                        Tuple tuple = (Tuple) t;
-                        commitRequest(t.getId(),workers[getWorkerIndex( tuple.getKey())],((Tuple) t).getRequest());
-                    }
-                }else{
-                    for (Transaction t : list) {
-                        Tuple tuple = (Tuple) t;
-                        rollbackRequest(workers[getWorkerIndex( tuple.getKey())],t.getId());
-                    }
-                }
-            }
-
-        } catch (InterruptedException | ExecutionException e) {
-            e.printStackTrace();
-        }
 
 
         Serializer reqPutSer = new SerializerBuilder().addType(Map.class).addType(RequestPut.class).build();
@@ -106,7 +75,11 @@ public class Coordinator {
             }
         },es);
 
-        this.channel.start();
+        try {
+            this.channel.start().thenCompose((o) -> makeRecover() ).get();
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+        }
     }
 
     private Boolean put(Map<Long,byte[]> values) {
@@ -133,11 +106,12 @@ public class Coordinator {
 
         try {
 
-            Arrays.stream(array).forEach(l ->
-                    this.journal.addSegment(new Tuple(l,null, Tuple.Type.PREPARED,request,transaction)));
+            Arrays.stream(array).forEach(key ->
+                    this.journal.addSegment(new CoordinatorTuple(key,null, Tuple.Type.PREPARED,request,transaction,workers[getWorkerIndex(key)])));
             for (Long key : array){
                 if(getLock.test(transaction,key)){
                     workersConfirm.add(workers[getWorkerIndex(key)]);
+                    this.journal.addSegment(new CoordinatorTuple(key,null, Tuple.Type.OK,request,transaction, workers[getWorkerIndex(key)]));
                 }
                 else{
                     CompletableFuture.allOf(workersConfirm.stream()
@@ -146,7 +120,6 @@ public class Coordinator {
                     return null;
                 }
             }
-
             CompletableFuture.allOf(workersConfirm.stream()
                     .map(address -> commitRequest(transaction, address,request).thenRun(() -> { }))
                     .toArray(CompletableFuture[]::new)).get();
@@ -181,10 +154,11 @@ public class Coordinator {
             return channel.sendAndReceive(
                     workers[getWorkerIndex(key)],
                     "PREPARE",
-                    s.encode(new Tuple(key, value , Tuple.Type.PREPARED, request, transactionId)),es
+                    s.encode(new Tuple(key, value , Tuple.Type.PREPARED, request, transactionId)),es1
                     )
                     .thenApply(consumer::test).get();
         } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
             return  false;
         }
     }
@@ -193,7 +167,8 @@ public class Coordinator {
 
         return channel.sendAsync(worker,"CONFIRM",s.encode(
                 new Tuple(0,null, Tuple.Type.COMMIT,request,transactionId))).whenComplete((o,e) ->{
-                    this.journal.addSegment(new Tuple(0,null, Tuple.Type.COMMIT,request,transactionId));
+                    System.out.println("Commit transaction " + transactionId);
+                    this.journal.addSegment(new CoordinatorTuple(0,null, Tuple.Type.COMMIT,request,transactionId,worker));
                     this.oldTransactions.put(transactionId,true);
         } );
     }
@@ -201,6 +176,57 @@ public class Coordinator {
     private CompletableFuture<Void> rollbackRequest(Address address, int transactionId){
         return channel.sendAsync(address,"CONFIRM",s.encode(
                 new Tuple(0,null, Tuple.Type.ROLLBACK, Tuple.Request.CANCEL, transactionId)));
+    }
+
+    private CompletableFuture<Void> makeRecover(){
+
+        CompletableFuture cp = new CompletableFuture();
+        try{
+            return  cp;
+        }finally {
+
+            List< Transaction > list = null;
+            try {
+                list = journal.getCommitted().get();
+
+                for( Transaction t : list) {
+                    CoordinatorTuple tuple = (CoordinatorTuple) t;
+                    if (tuple.getRequest().equals(Tuple.Request.PUT))
+                        oldTransactions.put(tuple.getId(), true);
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
+
+
+            try {
+                numberOfTrans = journal.getTransactionId().get();
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
+
+            try {
+                list = journal.getLastUnconfirmed().get();
+                if(list.size() != 0){
+                    if(list.get(0).isOk()){
+                        for (Transaction t : list) {
+                            Tuple tuple = (Tuple) t;
+                            commitRequest(t.getId(),workers[getWorkerIndex( tuple.getKey())],((Tuple) t).getRequest());
+                        }
+                    }else{
+                        for (Transaction t : list) {
+                            Tuple tuple = (Tuple) t;
+                            rollbackRequest(workers[getWorkerIndex( tuple.getKey())],t.getId());
+                        }
+                    }
+                }
+
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
+
+            cp.complete(null);
+        }
     }
 
     private synchronized int getNextTransactionId(){

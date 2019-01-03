@@ -75,7 +75,7 @@ public class Worker {
 
                 MyLock ml = new MyLock();
                 locks.put( tuple.getKey(), ml );
-                CompletableFuture<byte[]> cf = new CompletableFuture<>();
+                CompletableFuture<Boolean> cf = new CompletableFuture<>();
                 ml.lock(cf);
                 cf.get();
 
@@ -133,9 +133,9 @@ public class Worker {
 
             if( DEBUG)  System.out.println("[W"+ myId + "] <== " + tuple.toString() );
 
-            CompletableFuture<byte[]> cf;
+            CompletableFuture<Boolean> cf;
 
-            cf = new CompletableFuture<>();
+            cf = new CompletableFuture<Boolean>();
 
             if( ! transactionsActions.containsKey( tuple.getId()) )
                 this.transactionsActions.put( tuple.getId(), new ArrayList<>() );

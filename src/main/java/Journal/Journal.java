@@ -1,10 +1,13 @@
 package Journal;
 
+import Serializers.CoordinatorTuple;
 import Serializers.Transaction;
 
+import Serializers.Tuple;
 import io.atomix.storage.journal.SegmentedJournal;
 import io.atomix.storage.journal.SegmentedJournalReader;
 import io.atomix.storage.journal.SegmentedJournalWriter;
+import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 
 import java.util.*;
@@ -81,6 +84,16 @@ public class Journal {
         }
     }
 
+    public CompletableFuture<Integer> getTransactionId(){
+        CompletableFuture<Integer> cp = new CompletableFuture<>();
+
+        try {
+            return cp;
+        }finally {
+            cp.complete(transactionId());
+        }
+    }
+
     private List<Transaction> filterLog( boolean flag) {
         // flag == true -> return just committed transactions
         // flag == false -> return just unconfirmed transactions
@@ -126,20 +139,33 @@ public class Journal {
     private List<Transaction> getLastTransaction(){
         List<Transaction> unconfirmed = new ArrayList<>();
         List<Transaction> aux ;
+        Transaction last = null;
+        reader = j.openReader(0);
 
-        if (writer != null) {
-            writer.close();
-            writer = null;
-            reader = j.openReader(0);
+        while (reader.hasNext()) {
+
+            last = (Transaction) reader.next().entry();
+
         }
 
-        Transaction last = (Transaction) j.openReader(j.maxEntrySize()).getCurrentEntry();
+        reader = j.openReader(0);
         if(last == null) return unconfirmed;
         if(last.isCommit() ){
             int id = last.getId();
             unconfirmed = filterLog(true);
+            unconfirmed.addAll(filterLog(false));
             unconfirmed.removeIf(l -> l.getId() != id );
             unconfirmed.removeIf(l -> l.isPrepare() || l.isRollback() || l.isCommit());
+            Transaction finalLast = last;
+            unconfirmed.removeIf(l -> ((CoordinatorTuple) l).getAddress().equals(((CoordinatorTuple) finalLast).getAddress()));
+
+            Set<Address> addresses = unconfirmed.stream()
+                    .map(l -> ((CoordinatorTuple) l).getAddress())
+                    .collect(Collectors.toSet());
+            unconfirmed = addresses.stream()
+                    .map( address -> new Tuple(0,null, Tuple.Type.OK,((CoordinatorTuple) finalLast).getRequest(),id))
+                    .collect(Collectors.toList());
+
         } else {
 
             int id = last.getId();
@@ -148,10 +174,33 @@ public class Journal {
             unconfirmed.removeIf(l -> l.getId() != id );
             unconfirmed.removeIf(l -> l.isPrepare());
             aux.removeIf(l -> l.isOk());
+
+            Transaction finalLast = last;
             if(unconfirmed.size() != aux.size()) unconfirmed = aux;
+
+            Set<Address> addresses = unconfirmed.stream()
+                    .map(l -> ((CoordinatorTuple) l).getAddress())
+                    .collect(Collectors.toSet());
+            unconfirmed = addresses.stream()
+                    .map( address -> new Tuple(0,null, Tuple.Type.ROLLBACK,Tuple.Request.CANCEL,id))
+                    .collect(Collectors.toList());
         }
 
         return unconfirmed;
+    }
+
+    private int transactionId(){
+        Transaction last = null;
+        reader = j.openReader(0);
+
+        while (reader.hasNext()) {
+
+            last = (Transaction) reader.next().entry();
+
+        }
+
+        if(last == null) return 0;
+        return last.getId() +1;
     }
 }
 
