@@ -57,7 +57,6 @@ public class Worker {
 
             Tuple tuple = serializerTuple.decode(m);
 
-
             if( DEBUG)  System.out.println("[W"+ myId + "] <== " + tuple.toString() );
 
             Tuple.Type msg = tuple.getMsg();
@@ -174,8 +173,8 @@ public class Worker {
             return cp;
         } finally {
 
-            ///////////////// Recover  //////////////////
 
+            ///////////////// Recover  //////////////////
 
             if( DEBUG)  System.out.println("[W" + myId + "] Start recover");
 

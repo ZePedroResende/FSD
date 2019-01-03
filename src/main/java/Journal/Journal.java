@@ -138,6 +138,7 @@ public class Journal {
     }
 
     private List<Transaction> getLastTransaction(){
+
         List<Transaction> unconfirmed = new ArrayList<>();
         List<Transaction> aux ;
         Transaction last = null;
