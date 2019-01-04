@@ -1,5 +1,6 @@
 package Test;
 
+import Config.Config;
 import Coordinator.Coordinator;
 import Serializers.*;
 import Serializers.Tuple;
@@ -11,6 +12,7 @@ import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 import io.atomix.utils.serializer.SerializerBuilder;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -48,12 +50,16 @@ public class SimpleTest{
         coordinators = new Coordinator[numCoords];
 
         for(int i = 0; i < numCoords; i ++ ){
-            coordinators[i] = new Coordinator(coordAddress, workerAddress, i);
+            try {
+                coordinators[i] = new Coordinator(i, Config.loadConfig());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
         Thread.sleep(10000);
 
         try {
-            api = new Middleware(coordAddress,"12346");
+            api = new Middleware("1239",Config.loadConfig());
         } catch (Exception e) {
             e.printStackTrace();
         }

@@ -48,9 +48,9 @@ public class Coordinator {
             TIMEOUT = config.getTimeoutDefault();
         }
         this.coordinators = IntStream.range(0, NUMCOORD)
-                .mapToObj(i -> Address.from(  String.format("localhost:11%03d", i))).toArray(Address[]::new) ;
+                .mapToObj(i -> Address.from(  String.format("localhost:22%03d", i))).toArray(Address[]::new) ;
         this.workers = IntStream.range(0, NUMWORKER)
-                .mapToObj(i -> Address.from(  String.format("localhost:22%03d", i))).toArray(Address[]::new) ;;
+                .mapToObj(i -> Address.from(  String.format("localhost:11%03d", i))).toArray(Address[]::new) ;;
         this.myId = myId;
         this.channel = NettyMessagingService.builder().withAddress(coordinators[myId]).build();
         this.es = Executors.newSingleThreadExecutor();
