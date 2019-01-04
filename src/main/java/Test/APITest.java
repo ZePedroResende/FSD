@@ -2,6 +2,7 @@ package Test;
 
 import API.API;
 import API.Middleware;
+import Config.Config;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -22,9 +23,9 @@ public class APITest extends Thread {
 
     private  Middleware md;
 
-    APITest( String port){
+    public APITest( String port){
         try {
-            this.md = new Middleware(port);
+            this.md = new Middleware(port, Config.loadConfig());
         } catch (Exception e) {
             e.printStackTrace();
         }
