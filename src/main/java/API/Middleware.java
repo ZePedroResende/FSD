@@ -36,13 +36,6 @@ public class Middleware {
     private ManagedMessagingService channel;
     private ExecutorService es;
 
-    public Middleware( Address[] addresses, String client) throws Exception {
-
-        this.addresses = addresses;
-
-        startUp( client );
-    }
-
     public Middleware(String client, Config config) throws Exception {
 
         int NUMCOORD = config.getNumCoordinators();
