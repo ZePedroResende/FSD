@@ -36,7 +36,11 @@ public class Middleware {
     private ManagedMessagingService channel;
     private ExecutorService es;
 
-    public Middleware(String client, Config config) throws Exception {
+    public Middleware( Config config) throws InterruptedException, ExecutionException, IOException {
+        this( config.getDefaultPort(), config);
+    }
+
+    public Middleware(int port, Config config) throws InterruptedException, ExecutionException, IOException {
 
         int NUMCOORD = config.getNumCoordinators();
 
@@ -44,11 +48,6 @@ public class Middleware {
 
         for( int i = 0; i < NUMCOORD; i ++ )
             this.addresses[i] = Address.from( String.format("localhost:22%03d", i) );
-
-        startUp( client );
-    }
-
-    private void startUp(String client) throws Exception {
 
         File file= new File(".nextId.txt");
 
@@ -70,7 +69,7 @@ public class Middleware {
         this.getsWaiting= new HashMap<>();
 
         this.channel = NettyMessagingService.builder()
-                .withAddress( Address.from( "localhost:" + client) )
+                .withAddress( Address.from( "localhost:" + port) )
                 .build();
 
         this.es = Executors.newSingleThreadExecutor();
@@ -90,6 +89,7 @@ public class Middleware {
         }, es);
 
         this.channel.start().get();
+
     }
 
     public CompletableFuture<Boolean> put(Map<Long,byte[]> values){
