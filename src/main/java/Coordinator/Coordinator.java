@@ -86,11 +86,11 @@ public class Coordinator {
 
         channel.registerHandler( "get", (o, m) -> {
             RequestGet requestGet = reqGetSer.decode(m);
-            if(DEBUG) System.out.println("[W"+this.myId+"] ==> GET ID:"+ requestGet.getId());
+            if(DEBUG) System.out.println("[C"+this.myId+"] ==> GET ID:"+ requestGet.getId());
             int idClient = requestGet.getId();
             Map<Long,byte[]> map = get(requestGet.getValues(),idClient,o.toString());
 
-            if(DEBUG) System.out.println("[W"+this.myId+"] <== GET ID:"+ requestGet.getId()+" " +  map!= null ? map.entrySet(): "NULL");
+            if(DEBUG) System.out.println("[C"+this.myId+"] <== GET ID:"+ requestGet.getId()+" " +  map!= null ? map.entrySet(): "NULL");
             this.channel.sendAsync(o,
                     "get", respGetSer.encode(new ResponseGet(map,idClient)));
             //return respGetSer.encode(new ResponseGet(map,idClient));

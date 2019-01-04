@@ -26,7 +26,6 @@ public class CoordinatorTest {
     private static Address[] workerAddress;
     public static int numCoords;
     private static CoordinatorTest test;
-    private static Middleware api;
     private final ManagedMessagingService channel;
     private final ExecutorService executorService;
     private static Serializer s;
@@ -67,7 +66,7 @@ public class CoordinatorTest {
         return s.encode(t);
     }
 
-
+/*
     public static void  main(String[] args) throws ExecutionException, InterruptedException {
 
         ///////////////// Initiation  /////////////////
@@ -203,6 +202,6 @@ class Middleware {
                     return response.getResponse();
                 });
     }
-
+*/
 }
 

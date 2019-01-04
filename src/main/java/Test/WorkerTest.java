@@ -70,7 +70,7 @@ public class WorkerTest {
     private static Address[] addrWorkers;
     private static WorkerTest test;
     private static Map< Integer, List<Tuple> > results;
-
+/*
     public static void  main(String[] args) throws ExecutionException, InterruptedException {
 
         ///////////////// Initiation  /////////////////
@@ -291,5 +291,5 @@ public class WorkerTest {
         results.get( getId(o) ).add(t);
 
     }
-
+*/
 }
