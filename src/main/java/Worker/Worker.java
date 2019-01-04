@@ -29,11 +29,11 @@ public class Worker {
     private Map<Long, MyLock> locks;
     private Map<Integer, List<Tuple>> transactionsActions;
 
-    public Worker(int myId, Address myAddr) throws ExecutionException, InterruptedException {
-        this(myId, myAddr, null);
+    public Worker(int myId) throws ExecutionException, InterruptedException {
+        this(myId, null);
     }
 
-    public Worker(int myId, Address myAddr, Config config) throws ExecutionException, InterruptedException {
+    public Worker(int myId, Config config) throws ExecutionException, InterruptedException {
 
         ///////////////// Initiation  /////////////////
         if (config != null){
@@ -58,7 +58,7 @@ public class Worker {
         ExecutorService executorService = Executors.newSingleThreadExecutor();
 
         this.channel = NettyMessagingService.builder()
-                .withAddress( myAddr )
+                .withAddress( getAddresFromId(myId))
                 .build();
 
 
