@@ -1,5 +1,6 @@
 package Coordinator;
 
+import Config.Config;
 import Journal.Journal;
 import Serializers.*;
 import io.atomix.cluster.messaging.ManagedMessagingService;
@@ -27,9 +28,17 @@ public class Coordinator {
     private Map<Integer,Map.Entry<Integer,String>> oldTransactions;
     private Map<Integer,Map.Entry<Integer,String>> oldRollbacks;
     private Journal journal;
-    private static final boolean DEBUG = true;
+    private boolean DEBUG;
+    private int NUMCOORD;
 
-    public Coordinator(Address[] coordinators , Address[] workers, int myId) {
+    public Coordinator(int myId, Config config) {
+        if (config != null){
+            NUMCOORD = config.getNumCoordinators();
+            DEBUG = config.getDebugMode();
+        } else {
+            NUMCOORD = 1;
+            DEBUG = true;
+        }
         this.coordinators = coordinators;
         this.workers = workers;
         this.myId = myId;
@@ -51,12 +60,11 @@ public class Coordinator {
         Serializer respPutSer = new SerializerBuilder().addType(Boolean.class).addType(ResponsePut.class).build();
 
         channel.registerHandler( "put", (o, m) -> {
-            System.out.println("PUT");
             RequestPut requestPut = reqPutSer.decode(m);
+            if(DEBUG) System.out.println("[W"+this.myId+"] ==> PUT ID:"+ requestPut.getId()+" " + requestPut.getValues().entrySet());
             int idClient = requestPut.getId();
             Boolean b = put(requestPut.getValues(),idClient,o.toString());
-
-
+            if(DEBUG) System.out.println("[W"+this.myId+"] <== PUT ID:"+ requestPut.getId()+" " + b);
             this.channel.sendAsync(o,
                     "put", respPutSer.encode(new ResponsePut(b,idClient)));
            // return respPutSer.encode(new ResponsePut(b,idClient));
@@ -67,11 +75,12 @@ public class Coordinator {
         Serializer respGetSer =new SerializerBuilder().addType(Map.class).addType(ResponseGet.class).build();
 
         channel.registerHandler( "get", (o, m) -> {
-            System.out.println("GET");
             RequestGet requestGet = reqGetSer.decode(m);
+            if(DEBUG) System.out.println("[W"+this.myId+"] ==> GET ID:"+ requestGet.getId());
             int idClient = requestGet.getId();
             Map<Long,byte[]> map = get(requestGet.getValues(),idClient,o.toString());
 
+            if(DEBUG) System.out.println("[W"+this.myId+"] <== GET ID:"+ requestGet.getId()+" " +  map!= null ? map.entrySet(): "NULL");
             this.channel.sendAsync(o,
                     "get", respGetSer.encode(new ResponseGet(map,idClient)));
             //return respGetSer.encode(new ResponseGet(map,idClient));
@@ -79,7 +88,7 @@ public class Coordinator {
 
         channel.registerHandler("RETRY",  (o, m) -> {
             Tuple t = this.s.decode(m);
-            System.out.println("RETRY id =" + t.getId() );
+            if(DEBUG) System.out.println("RETRY id =" + t.getId() );
             if(t.getId() < this.numberOfTrans){
                 if(this.oldTransactions.containsKey(t.getId())){
                     Map.Entry<Integer,String> entry = this.oldTransactions.get(t.getId());
@@ -199,7 +208,7 @@ public class Coordinator {
 
         return channel.sendAsync(worker,"CONFIRM",s.encode(
                 new Tuple(0,null, Tuple.Type.COMMIT,request,transactionId))).whenComplete((o,e) ->{
-                    System.out.println("Commit transaction " + transactionId);
+                    if(DEBUG) System.out.println("Commit transaction " + transactionId);
                     this.journal.addSegment(new CoordinatorTuple(0,null, Tuple.Type.COMMIT,request,transactionId,worker,idClient, clientAddress));
                     this.oldTransactions.put(transactionId,new AbstractMap.SimpleEntry<>(idClient,clientAddress));
         } );
@@ -208,7 +217,7 @@ public class Coordinator {
     private CompletableFuture<Void> rollbackRequest(Address address, int transactionId, int idClient, String clientAddress) {
         return channel.sendAsync(address,"CONFIRM",s.encode(
                 new Tuple(0,null, Tuple.Type.ROLLBACK, Tuple.Request.CANCEL, transactionId))).whenComplete((o,e) ->{
-            System.out.println("Rollback transaction " + transactionId);
+            if(DEBUG) System.out.println("Rollback transaction " + transactionId);
             this.journal.addSegment(new CoordinatorTuple(0,null, Tuple.Type.ROLLBACK,Tuple.Request.CANCEL,transactionId,address,idClient, clientAddress));
             this.oldRollbacks.put(transactionId,new AbstractMap.SimpleEntry<>(idClient,clientAddress));
         });
