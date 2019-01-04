@@ -116,8 +116,10 @@ public class Journal {
             if ( t.isCommit() ) {
 
                 List<Transaction> list = data.get( t.getId() );
-                committed.addAll( list );
-                data.remove( t.getId() );
+                if(list != null){
+                    committed.addAll( list );
+                    data.remove( t.getId() );
+                }
             }else {
 
                 if ( t.isRollback() ){

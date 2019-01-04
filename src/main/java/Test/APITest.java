@@ -49,6 +49,7 @@ public class APITest implements Runnable {
         /* Just test a put and a get */
 
         Map<Long, byte[]> map = new HashMap<>();
+
         map.put(1L, "Ola".getBytes());
         map.put(2L, "Mundo".getBytes());
         map.put(3L, "Lindo".getBytes());
@@ -156,6 +157,11 @@ class RunMiddleware{
             worker[i].start();
         }
 
+        try {
+            Thread.sleep(10000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         for(int i =0; i<c.getNumCoordinators(); i++){
             coordinator[i] = new Thread(new Coordenador(i));
         }

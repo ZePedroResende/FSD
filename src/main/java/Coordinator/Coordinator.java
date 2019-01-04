@@ -14,6 +14,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 
@@ -137,8 +138,9 @@ public class Coordinator {
         Set<Long> l = values.keySet();
         Long[] array =  l.toArray(new Long[l.size()]);
 
-        return getLocks(array, (transaction, key) -> putRequest(transaction, key, values.get(key)), Tuple.Request.PUT, idClient,clientAddress)
+        boolean b = getLocks(array, (transaction, key) -> putRequest(transaction, key, values.get(key)), Tuple.Request.PUT, idClient, clientAddress)
                 != null;
+        return b;
     }
 
     private Map<Long, byte[]> get(Collection<Long> gets, int idClient, String clientAddress) {
@@ -153,7 +155,7 @@ public class Coordinator {
     private List<Address> getLocks(Long[] array, BiPredicate<Integer,Long> getLock, Tuple.Request request, int idClient, String clientAddress) {
         int transaction = getNextTransactionId();
         Arrays.sort(array);
-        List<Address> workersConfirm = new ArrayList<>();
+        Set<Address> workersConfirm = new HashSet<>();
 
         try {
 
@@ -171,14 +173,18 @@ public class Coordinator {
                     return null;
                 }
             }
-            CompletableFuture.allOf(workersConfirm.stream()
-                    .map(address -> commitRequest(transaction, address,request,idClient,clientAddress).thenRun(() -> { }))
-                    .toArray(CompletableFuture[]::new)).get();
 
-            return workersConfirm;
+            List<CompletableFuture<Void>> commits = new ArrayList<>();
+            for (Address address : workersConfirm){
+               commits.add( commitRequest(transaction, address,request,idClient,clientAddress));
+            }
+            CompletableFuture.allOf(commits.toArray(new CompletableFuture[workersConfirm.size()])).get();
+
+            return workersConfirm.stream().collect(Collectors.toList());
         } catch (InterruptedException | ExecutionException e) {
             //e.printStackTrace();
-            return null;
+            //return null;
+            return workersConfirm.stream().collect(Collectors.toList());
         }
     }
 

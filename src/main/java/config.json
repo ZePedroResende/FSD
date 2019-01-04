@@ -1,7 +1,7 @@
 {
   "debugMode" : true,
-  "numCoordinators" : 1,
-  "numWorkers" : 30,
+  "numCoordinators" : 40,
+  "numWorkers" : 40,
   "timeout" : 5000,
   "defaultPort" : 12345
 }
