@@ -40,8 +40,8 @@ public class Worker {
             NUMCOORD = config.getNumCoordinators();
             DEBUG = config.getDebugMode();
         } else {
-            NUMCOORD = 1;
-            DEBUG = true;
+            NUMCOORD = config.getNumCoordinatorsDefault();
+            DEBUG = config.getDebugModeDefault();
         }
 
 

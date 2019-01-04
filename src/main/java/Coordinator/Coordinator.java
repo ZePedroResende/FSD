@@ -9,10 +9,12 @@ import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Serializer;
 import io.atomix.utils.serializer.SerializerBuilder;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
+import java.util.stream.IntStream;
 
 
 public class Coordinator {
@@ -22,7 +24,7 @@ public class Coordinator {
     private final ManagedMessagingService channel;
     private final int myId;
     private final ExecutorService es;
-    private final ExecutorService es1;
+    private final ExecutorService SaRExec;
     private final Serializer s;
     private int numberOfTrans;
     private Map<Integer,Map.Entry<Integer,String>> oldTransactions;
@@ -30,21 +32,29 @@ public class Coordinator {
     private Journal journal;
     private boolean DEBUG;
     private int NUMCOORD;
+    private int NUMWORKER;
+    private int TIMEOUT;
 
     public Coordinator(int myId, Config config) {
         if (config != null){
             NUMCOORD = config.getNumCoordinators();
+            NUMWORKER = config.getNumWorkers();
             DEBUG = config.getDebugMode();
+            TIMEOUT = config.getTimeout();
         } else {
-            NUMCOORD = 1;
-            DEBUG = true;
+            NUMCOORD = config.getNumCoordinatorsDefault();
+            NUMWORKER = config.getNumWorkersDefault();
+            DEBUG = config.getDebugModeDefault();
+            TIMEOUT = config.getTimeoutDefault();
         }
-        this.coordinators = coordinators;
-        this.workers = workers;
+        this.coordinators = IntStream.range(0, NUMCOORD)
+                .mapToObj(i -> Address.from(  String.format("localhost:11%03d", i))).toArray(Address[]::new) ;
+        this.workers = IntStream.range(0, NUMWORKER)
+                .mapToObj(i -> Address.from(  String.format("localhost:22%03d", i))).toArray(Address[]::new) ;;
         this.myId = myId;
         this.channel = NettyMessagingService.builder().withAddress(coordinators[myId]).build();
         this.es = Executors.newSingleThreadExecutor();
-        this.es1 = Executors.newSingleThreadExecutor();
+        this.SaRExec = Executors.newSingleThreadExecutor();
         this.s = Serializer.builder()
                 .addType(Tuple.Request.class)
                 .addType(Tuple.Type.class)
@@ -195,7 +205,7 @@ public class Coordinator {
             return channel.sendAndReceive(
                     workers[getWorkerIndex(key)],
                     "PREPARE",
-                    s.encode(new Tuple(key, value , Tuple.Type.PREPARED, request, transactionId)),es1
+                    s.encode(new Tuple(key, value , Tuple.Type.PREPARED, request, transactionId)), Duration.ofMillis(TIMEOUT), SaRExec
                     )
                     .thenApply(consumer::test).get();
         } catch (InterruptedException | ExecutionException e) {

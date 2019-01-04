@@ -27,12 +27,15 @@ public class Config {
     private final boolean debugMode;
     private final int numCoordinators;
     private final int numWorkers;
+    private final int timeout;
 
 
-    public Config(boolean debugMode, int numCoordinators, int numWorkers) {
+
+    public Config(boolean debugMode, int numCoordinators, int numWorkers, int timeout) {
         this.debugMode = debugMode;
         this.numCoordinators = numCoordinators;
         this.numWorkers = numWorkers;
+        this.timeout = timeout;
     }
 
     public boolean getDebugMode() {
@@ -47,6 +50,26 @@ public class Config {
         return numWorkers;
     }
 
+    public int getTimeout() {
+        return timeout;
+    }
+
+    public boolean getDebugModeDefault() {
+        return true;
+    }
+
+    public int getNumCoordinatorsDefault() {
+        return 1;
+    }
+
+    public int getNumWorkersDefault() {
+        return 1;
+    }
+
+    public int getTimeoutDefault() {
+        return 50000;
+    }
+
     public static String getFilePath() {
         return filePath;
     }
@@ -57,6 +80,7 @@ public class Config {
         sb.append( "Debug = ").append(debugMode).append("\n");
         sb.append( "NumCoordinators = ").append(numCoordinators).append("\n");
         sb.append( "NumWorkers = ").append(numWorkers).append("\n");
+        sb.append( "timeout = ").append(timeout).append("\n");
         return sb.toString();
     }
 

@@ -3,6 +3,7 @@
   "debugMode" : true,
   "defaultPort" : 12345,
   "NumCoordinators" : 44,
-  "NumWorkers" : 3
+  "NumWorkers" : 3,
+  "timeout" : 3
 }
 
