@@ -43,7 +43,7 @@ public class SimpleTest{
         Address[] workerAddress = {Address.from("localhost:12347")};
         Address[] coordAddress = {Address.from("localhost:11000")};
 
-        test = new Worker(0,workerAddress[0]);
+        test = new Worker(0 );
 
         Thread.sleep(10000);
 
@@ -59,7 +59,7 @@ public class SimpleTest{
         Thread.sleep(10000);
 
         try {
-            api = new Middleware("1239",Config.loadConfig());
+            api = new Middleware(1239,Config.loadConfig());
         } catch (Exception e) {
             e.printStackTrace();
         }

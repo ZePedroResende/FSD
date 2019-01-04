@@ -24,24 +24,34 @@ public class Config {
         return gson.fromJson(reader,  Config.class);
     }
 
+    public static Config defaultConfig(){
+        return new Config(true, 1,1,5000,12345);
+    }
+
+
     private final boolean debugMode;
     private final int numCoordinators;
     private final int numWorkers;
     private final int timeout;
+    private final int defaultPort;
 
 
 
-    public Config(boolean debugMode, int numCoordinators, int numWorkers, int timeout) {
+    public Config(boolean debugMode, int numCoordinators, int numWorkers, int timeout, int defaultPort) {
         this.debugMode = debugMode;
         this.numCoordinators = numCoordinators;
         this.numWorkers = numWorkers;
         this.timeout = timeout;
+        this.defaultPort = defaultPort;
     }
 
     public boolean getDebugMode() {
         return debugMode;
     }
 
+    public int getDefaultPort(){
+        return this.defaultPort;
+    }
     public int getNumCoordinators() {
         return numCoordinators;
     }
