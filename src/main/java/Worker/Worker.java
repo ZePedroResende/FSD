@@ -20,7 +20,7 @@ import java.util.function.BiFunction;
 
 public class Worker {
 
-    private static int NUMCOORD;
+    private static int NUMWORKER;
     private static boolean DEBUG;
 
     private final ManagedMessagingService channel;
@@ -37,10 +37,10 @@ public class Worker {
 
         ///////////////// Initiation  /////////////////
         if (config != null){
-            NUMCOORD = config.getNumCoordinators();
+            NUMWORKER = config.getNumWorkers();
             DEBUG = config.getDebugMode();
         } else {
-            NUMCOORD = config.getNumCoordinatorsDefault();
+            NUMWORKER = config.getNumWorkersDefault();
             DEBUG = config.getDebugModeDefault();
         }
 
@@ -168,7 +168,7 @@ public class Worker {
     }
 
     private Address getAddresFromId(int id) {
-        int coord= id % NUMCOORD;
+        int coord= id % NUMWORKER;
         return Address.from(  String.format("localhost:11%03d", coord));
     }
 

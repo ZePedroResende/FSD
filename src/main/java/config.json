@@ -1,8 +1,7 @@
 {
-  "_comment" : "Portas reservadas: 11xxx(workers), 22xxx(coordinators)",
   "debugMode" : true,
-  "NumCoordinators" : 44,
-  "NumWorkers" : 3,
+  "numCoordinators" : 40,
+  "numWorkers" : 40,
   "timeout" : 5000,
   "defaultPort" : 12345
 }
